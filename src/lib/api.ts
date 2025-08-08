@@ -35,7 +35,14 @@ async function request(path: string) {
 }
 
 export const api = {
-  getQuestions: async (n = 10) => request(`/get-questions?n=${n}`),
+  getQuestions: async (n = 10, topic?: string, difficulty?: string, includeAnswers?: boolean) => {
+    const params = new URLSearchParams();
+    params.set('n', String(n));
+    if (topic && topic.trim()) params.set('topic', topic.trim());
+    if (difficulty && difficulty.trim()) params.set('difficulty', difficulty.trim());
+    if (includeAnswers) params.set('include_answers', '1');
+    return request(`/get-questions?${params.toString()}`);
+  },
   getLeaderboard: async (limit = 10) => request(`/get-leaderboard?limit=${limit}`),
   submitQuiz: async (payload: { score: number; accuracy: number; speed: number }) => {
     // First try supabase.functions.invoke (adds auth automatically)

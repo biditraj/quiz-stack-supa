@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
-import { getQuizQuestions, getTopicQuestions } from "@/lib/questions";
+import { fetchQuestionsFromAI, fetchQuestionsFromDB, getQuizQuestions, getTopicQuestions } from "@/lib/questions";
 import { getTriviaQuestions } from "@/lib/trivia";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -23,6 +23,8 @@ type Question = {
 export default function QuizPage() {
   const { toast } = useToast();
   const [started, setStarted] = useState(false);
+  const [startMode, setStartMode] = useState<'db' | 'ai' | 'auto'>("auto");
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [topic, setTopic] = useState("");
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('easy');
   const [numQuestions, setNumQuestions] = useState<5 | 10 | 20>(10);
@@ -37,20 +39,29 @@ export default function QuizPage() {
   ];
 
   const { data: triviaQs, isLoading } = useQuery({
-    queryKey: ["topic-questions", topic, difficulty, numQuestions, started],
+    queryKey: ["topic-questions", topic, difficulty, numQuestions, started, startMode],
     queryFn: async () => {
       if (!started) return [] as any[];
       const count = numQuestions;
       const trimmed = topic.trim();
-      // 1) Try Gemini topic questions if topic provided
-      if (trimmed.length > 0) {
-        const topicQs = await getTopicQuestions(trimmed, count);
-        if (topicQs.length) return topicQs as any[];
+      if (startMode === 'db') {
+        // Use Supabase DB. If no topic, it will return random.
+        const dbQs = await fetchQuestionsFromDB(trimmed, difficulty, count);
+        return dbQs as any[];
+      } else if (startMode === 'ai') {
+        // Use Gemini AI strictly
+        const aiQs = await fetchQuestionsFromAI(trimmed || 'general knowledge', difficulty, count);
+        if (aiQs.length) return aiQs as any[];
+      } else {
+        // Auto: original fallback chain
+        if (trimmed.length > 0) {
+          const topicQs = await getTopicQuestions(trimmed, count);
+          if (topicQs.length) return topicQs as any[];
+        }
+        const trivia = await getTriviaQuestions({ amount: count, difficulty, type: 'multiple' });
+        if (trivia.length) return trivia as any[];
       }
-      // 2) Try OpenTrivia with chosen difficulty
-      const trivia = await getTriviaQuestions({ amount: count, difficulty, type: 'multiple' });
-      if (trivia.length) return trivia as any[];
-      // 3) Fall back to Supabase stored questions
+      // Fall back to random from DB
       return (await getQuizQuestions(count)) as any[];
     },
   });
@@ -108,9 +119,17 @@ export default function QuizPage() {
               <input
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter') {
+                    // Start AI-generated quiz directly
+                    setStartMode('ai');
+                    setStarted(true);
+                  }
+                }}
                 placeholder="e.g., JavaScript, World History, Space, Movies..."
                 className="w-full rounded-md border bg-background px-3 py-2"
               />
+              <div className="text-xs text-gray-500 mt-1">Press Enter to start an AI-generated quiz</div>
             </div>
 
             {/* Category grid */}
@@ -121,8 +140,12 @@ export default function QuizPage() {
                   <button
                     key={c.key}
                     type="button"
-                    onClick={() => setTopic(c.key === 'Random' ? '' : c.key)}
-                    className={`rounded-xl border px-3 py-4 text-sm hover:shadow-md transition ${topic === c.key ? 'border-blue-500' : ''}`}
+                    onClick={async () => {
+                      // Select category only; user starts via button below
+                      setSelectedCategory(c.key);
+                      setTopic('');
+                    }}
+                    className={`rounded-xl border px-3 py-4 text-sm hover:shadow-md transition ${selectedCategory === c.key ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30' : ''}`}
                   >
                     <div className="text-2xl mb-1">{c.emoji}</div>
                     <div className="font-medium">{c.key}</div>
@@ -165,8 +188,25 @@ export default function QuizPage() {
               </div>
             </div>
 
-            <div className="pt-2">
-              <Button onClick={() => setStarted(true)} className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white">Start Quiz</Button>
+            <div className="pt-2 flex gap-2">
+              <Button
+                onClick={() => {
+                  // For categories, prefer filtering by selected label if not Random; backend will fallback to random if no matches
+                  const chosen = selectedCategory && selectedCategory !== 'Random' ? selectedCategory : '';
+                  setTopic(chosen || '');
+                  setStartMode('db');
+                  setStarted(true);
+                }}
+                className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white"
+              >
+                Start from DB
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => { setStartMode('ai'); setStarted(true); }}
+              >
+                Start with AI
+              </Button>
             </div>
           </CardContent>
         </Card>
