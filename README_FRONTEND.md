@@ -56,10 +56,12 @@ A beautiful, modern React frontend for the QuizMaster quiz platform built with V
    cp .env.example .env
    ```
    
-   Fill in your Supabase credentials:
+   Fill in your Supabase credentials (and optional external MCQ key):
    ```env
    VITE_SUPABASE_URL=your_supabase_project_url
    VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+   # Optional external MCQ generation via Google Generative AI
+   VITE_QUESTIONS_API_KEY=your_google_genai_key
    ```
 
 3. **Start development server**:

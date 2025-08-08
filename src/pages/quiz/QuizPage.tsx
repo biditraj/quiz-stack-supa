@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
+import { getQuizQuestions, getTopicQuestions } from "@/lib/questions";
+import { getTriviaQuestions } from "@/lib/trivia";
 import { useToast } from "@/components/ui/use-toast";
 
 type Question = {
@@ -20,8 +22,39 @@ type Question = {
 
 export default function QuizPage() {
   const { toast } = useToast();
-  const { data, isLoading } = useQuery({ queryKey: ["questions"], queryFn: () => api.getQuestions(10) });
-  const questions: Question[] = (data as any)?.data ?? [];
+  const [started, setStarted] = useState(false);
+  const [topic, setTopic] = useState("");
+  const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('easy');
+  const [numQuestions, setNumQuestions] = useState<5 | 10 | 20>(10);
+  const categoryPresets = [
+    { key: 'Technology', emoji: '💻' },
+    { key: 'Science', emoji: '🔬' },
+    { key: 'History', emoji: '🏺' },
+    { key: 'Geography', emoji: '🗺️' },
+    { key: 'Movies & TV', emoji: '🎬' },
+    { key: 'Sports', emoji: '🏅' },
+    { key: 'Random', emoji: '🎲' },
+  ];
+
+  const { data: triviaQs, isLoading } = useQuery({
+    queryKey: ["topic-questions", topic, difficulty, numQuestions, started],
+    queryFn: async () => {
+      if (!started) return [] as any[];
+      const count = numQuestions;
+      const trimmed = topic.trim();
+      // 1) Try Gemini topic questions if topic provided
+      if (trimmed.length > 0) {
+        const topicQs = await getTopicQuestions(trimmed, count);
+        if (topicQs.length) return topicQs as any[];
+      }
+      // 2) Try OpenTrivia with chosen difficulty
+      const trivia = await getTriviaQuestions({ amount: count, difficulty, type: 'multiple' });
+      if (trivia.length) return trivia as any[];
+      // 3) Fall back to Supabase stored questions
+      return (await getQuizQuestions(count)) as any[];
+    },
+  });
+  const questions: Question[] = (triviaQs as any) ?? [];
 
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<Record<string, string>>({});
@@ -49,15 +82,97 @@ export default function QuizPage() {
     const total = questions.length;
     const correctCount = Object.values(correctMap).filter(Boolean).length;
     const elapsedSec = Math.max(1, Math.round((Date.now() - startAt) / 1000));
-    const accuracy = Math.round((correctCount / total) * 100);
-    const speed = Math.round(total / elapsedSec * 60); // questions per minute
+    const accuracyFraction = total > 0 ? correctCount / total : 0; // 0..1 for DB
+    const accuracyPercent = Math.round(accuracyFraction * 100); // for UI
+    const speed = Math.round((total / elapsedSec) * 60); // questions per minute
     try {
-      await api.submitQuiz({ score: correctCount, accuracy, speed });
-      toast({ title: "Results saved", description: `Score ${correctCount}/${total}, Acc ${accuracy}%` });
+      await api.submitQuiz({ score: correctCount, accuracy: accuracyFraction, speed });
+      toast({ title: "Results saved", description: `Score ${correctCount}/${total}, Acc ${accuracyPercent}%` });
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Could not save results", description: e.message });
+      const message = typeof e?.message === 'string' ? e.message : 'Edge Function returned a non-2xx status code';
+      toast({ variant: "destructive", title: "Could not save results", description: message });
     }
   };
+
+  if (!started) {
+    return (
+      <div className="container py-10">
+        <Card className="max-w-2xl mx-auto bg-white/60 dark:bg-gray-900/60 backdrop-blur-md">
+          <CardHeader>
+            <CardTitle>Start a Quiz</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Topic search */}
+            <div>
+              <label className="block text-sm mb-2">Search a topic</label>
+              <input
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder="e.g., JavaScript, World History, Space, Movies..."
+                className="w-full rounded-md border bg-background px-3 py-2"
+              />
+            </div>
+
+            {/* Category grid */}
+            <div>
+              <label className="block text-sm mb-2">Or pick a category</label>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {categoryPresets.map((c) => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => setTopic(c.key === 'Random' ? '' : c.key)}
+                    className={`rounded-xl border px-3 py-4 text-sm hover:shadow-md transition ${topic === c.key ? 'border-blue-500' : ''}`}
+                  >
+                    <div className="text-2xl mb-1">{c.emoji}</div>
+                    <div className="font-medium">{c.key}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Difficulty */}
+            <div>
+              <label className="block text-sm mb-2">Difficulty</label>
+              <div className="flex gap-2">
+                {(['easy','medium','hard'] as const).map(d => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setDifficulty(d)}
+                    className={`rounded-md border px-3 py-2 text-sm capitalize ${difficulty === d ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30' : ''}`}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Number of questions */}
+            <div>
+              <label className="block text-sm mb-2">Number of Questions</label>
+              <div className="flex gap-2">
+                {([5,10,20] as const).map(n => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setNumQuestions(n)}
+                    className={`rounded-md border px-3 py-2 text-sm ${numQuestions === n ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30' : ''}`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <Button onClick={() => setStarted(true)} className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white">Start Quiz</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

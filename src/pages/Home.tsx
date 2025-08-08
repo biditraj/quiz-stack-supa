@@ -11,12 +11,15 @@ import {
   Star
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useEffect, useRef } from 'react';
+import gsap from 'gsap';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Home() {
   const { user } = useAuth();
+  const orbitRef = useRef<HTMLDivElement | null>(null);
 
   // Fetch leaderboard preview
   const { data: leaderboard, isLoading: loadingLeaderboard } = useQuery({
@@ -67,13 +70,22 @@ export default function Home() {
     }
   };
 
+  useEffect(() => {
+    if (!orbitRef.current) return;
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({ repeat: -1, defaults: { ease: 'none' } });
+      tl.to('.orbit-dot', { rotate: 360, transformOrigin: '150px 0px', duration: 12 });
+    }, orbitRef);
+    return () => ctx.revert();
+  }, []);
+
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
       <section className="relative overflow-hidden py-20 lg:py-32">
         <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 via-indigo-50/30 to-purple-50/50 dark:from-blue-950/50 dark:via-indigo-950/30 dark:to-purple-950/50" />
         
-        <motion.div
+         <motion.div
           variants={containerVariants}
           initial="hidden"
           animate="visible"
@@ -90,7 +102,7 @@ export default function Home() {
               </span>
             </motion.div>
 
-            <motion.h1
+             <motion.h1
               variants={itemVariants}
               className="text-4xl lg:text-6xl font-bold mb-6 bg-gradient-to-r from-gray-900 via-blue-800 to-indigo-800 dark:from-white dark:via-blue-200 dark:to-indigo-200 bg-clip-text text-transparent"
             >
@@ -100,6 +112,15 @@ export default function Home() {
                 Interactive Quizzes
               </span>
             </motion.h1>
+
+            {/* Decorative GSAP orbit animation */}
+            <div ref={orbitRef} className="relative h-0">
+              <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2">
+                <div className="relative h-0">
+                  <span className="orbit-dot inline-block h-2 w-2 rounded-full bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,.8)]" />
+                </div>
+              </div>
+            </div>
 
             <motion.p
               variants={itemVariants}
