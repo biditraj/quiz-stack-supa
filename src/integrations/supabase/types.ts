@@ -14,16 +14,168 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          username?: string
+        }
+        Relationships: []
+      }
+      questions: {
+        Row: {
+          correct_answer: string
+          created_at: string
+          id: string
+          image_url: string | null
+          options: Json | null
+          question_text: string
+          type: Database["public"]["Enums"]["question_type"]
+        }
+        Insert: {
+          correct_answer: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          options?: Json | null
+          question_text: string
+          type: Database["public"]["Enums"]["question_type"]
+        }
+        Update: {
+          correct_answer?: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          options?: Json | null
+          question_text?: string
+          type?: Database["public"]["Enums"]["question_type"]
+        }
+        Relationships: []
+      }
+      quiz_attempts: {
+        Row: {
+          accuracy: number
+          created_at: string
+          id: string
+          score: number
+          speed: number
+          user_id: string
+        }
+        Insert: {
+          accuracy?: number
+          created_at?: string
+          id?: string
+          score?: number
+          speed?: number
+          user_id: string
+        }
+        Update: {
+          accuracy?: number
+          created_at?: string
+          id?: string
+          score?: number
+          speed?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_attempts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "leaderboard"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "quiz_attempts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
-      [_ in never]: never
+      leaderboard: {
+        Row: {
+          avg_accuracy: number | null
+          avg_speed: number | null
+          rank: number | null
+          total_score: number | null
+          user_id: string | null
+          username: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      get_random_questions: {
+        Args: { n?: number }
+        Returns: {
+          id: string
+          type: Database["public"]["Enums"]["question_type"]
+          question_text: string
+          options: Json
+          image_url: string
+        }[]
+      }
+      has_role: {
+        Args: {
+          _user_id: string
+          _role: Database["public"]["Enums"]["app_role"]
+        }
+        Returns: boolean
+      }
+      leaderboard_top: {
+        Args: { limit_n?: number }
+        Returns: {
+          user_id: string
+          username: string
+          total_score: number
+          avg_accuracy: number
+          avg_speed: number
+          rank: number
+        }[]
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "moderator" | "user"
+      question_type:
+        | "multiple_choice"
+        | "true_false"
+        | "fill_blank"
+        | "image_based"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +302,14 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "moderator", "user"],
+      question_type: [
+        "multiple_choice",
+        "true_false",
+        "fill_blank",
+        "image_based",
+      ],
+    },
   },
 } as const
