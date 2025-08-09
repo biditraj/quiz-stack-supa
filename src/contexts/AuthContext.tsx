@@ -67,15 +67,25 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const { data, error } = await supabase
         .from('user_roles')
         .select('role')
-        .eq('user_id', user.id)
-        .single();
+        .eq('user_id', user.id);
 
       if (error) {
         setIsAdmin(false);
         return;
       }
 
-      setIsAdmin(data?.role === 'admin');
+      const roles = Array.isArray(data) ? data : [];
+      const hasRoleAdmin = roles.some((r: any) => r.role === 'admin');
+
+      // Fallback: allowlist by email via env (comma-separated)
+      const allowlistedEmails = String(import.meta.env.VITE_ADMIN_EMAILS || '')
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+      const email = (user.email || '').toLowerCase();
+      const isAllowlisted = email.length > 0 && allowlistedEmails.includes(email);
+
+      setIsAdmin(hasRoleAdmin || isAllowlisted);
     } catch (error) {
       setIsAdmin(false);
     }

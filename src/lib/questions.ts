@@ -10,10 +10,8 @@ type ExternalQuestion = {
 };
 
 async function fetchExternalMcqs(count: number, topic?: string): Promise<ExternalQuestion[]> {
-  const key = (import.meta.env.VITE_QUESTIONS_API_KEY as string | undefined) || "AIzaSyDCmMzVSbSl6zq2Z14i3_SVfT4dhytpQ7g";
-
-  // Example: use Google Generative AI to generate MCQs. Keep it bounded and simple.
-  // NOTE: This keeps generation client-side only when explicitly configured.
+  const key = (import.meta.env.VITE_QUESTIONS_API_KEY as string | undefined);
+  if (!key) return [];
   try {
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
     const genAI = new GoogleGenerativeAI(key);
@@ -22,7 +20,6 @@ async function fetchExternalMcqs(count: number, topic?: string): Promise<Externa
     const prompt = `Generate ${count} short multiple choice questions as a pure JSON array (no backticks, no prose). Each item must have fields: id, type (always "multiple_choice"), question_text, options (array of 4 concise strings), correct_answer (exactly one of options). Keep questions crisp and unambiguous. ${topicLine}`;
     const res = await model.generateContent(prompt);
     const text = res.response.text();
-    // Try to extract JSON
     const start = text.indexOf("[");
     const end = text.lastIndexOf("]");
     if (start === -1 || end === -1) return [];
@@ -41,22 +38,16 @@ async function fetchExternalMcqs(count: number, topic?: string): Promise<Externa
 }
 
 export async function getQuizQuestions(count = 10) {
-  // Prefer Supabase questions; if external key present, prepend some MCQs
-  const [external, supa] = await Promise.all([
-    fetchExternalMcqs(Math.min(5, count)),
-    api.getQuestions(count),
-  ]);
+  // Use Supabase questions only
+  const supa = await api.getQuestions(count, undefined, undefined, true);
   const supaQs = (supa as any)?.data || [];
-  // Normalize: if external questions have correct_answer we keep it; supabase Edge already returns correct answers in payload for client-side feedback only if function does so. If not, client feedback for external only.
-  return [...external, ...supaQs].slice(0, count);
+  return supaQs.slice(0, count);
 }
 
 export async function getTopicQuestions(topic: string, count = 10) {
-  // Try Gemini topic generation first, then fall back to Supabase
-  const ext = await fetchExternalMcqs(count, topic);
-  if (ext.length) return ext.slice(0, count);
-  const supa = await api.getQuestions(count, topic);
-  return ((supa as any)?.data || []) as ExternalQuestion[];
+  // Prefer Supabase topic filtering only
+  const supa = await api.getQuestions(count, topic, undefined, true);
+  return (((supa as any)?.data || []) as ExternalQuestion[]).slice(0, count);
 }
 
 export type NormalizedQuestion = {
@@ -73,63 +64,17 @@ export async function fetchQuestionsFromDB(topic: string, difficulty: string, li
   try {
     const res = await api.getQuestions(limit, topic, difficulty, true);
     const data: any[] = (res as any)?.data || [];
-    return data.length > 0 ? data as NormalizedQuestion[] : fallbackQuestions.slice(0, limit);
+    return data as NormalizedQuestion[];
   } catch {
-    return fallbackQuestions.slice(0, limit);
+    return [];
   }
 }
 
-// Fallback questions when database is empty
-const fallbackQuestions: NormalizedQuestion[] = [
-  {
-    id: 'fallback-1',
-    type: 'multiple_choice',
-    question_text: 'What is the capital of France?',
-    options: ['London', 'Berlin', 'Paris', 'Madrid'],
-    correct_answer: 'Paris',
-    image_url: null,
-    explanation: 'Paris is the capital and largest city of France.'
-  },
-  {
-    id: 'fallback-2',
-    type: 'multiple_choice',
-    question_text: 'Which planet is known as the Red Planet?',
-    options: ['Venus', 'Mars', 'Jupiter', 'Saturn'],
-    correct_answer: 'Mars',
-    image_url: null,
-    explanation: 'Mars appears red due to iron oxide on its surface.'
-  },
-  {
-    id: 'fallback-3',
-    type: 'multiple_choice',
-    question_text: 'What is the largest ocean on Earth?',
-    options: ['Atlantic Ocean', 'Indian Ocean', 'Arctic Ocean', 'Pacific Ocean'],
-    correct_answer: 'Pacific Ocean',
-    image_url: null,
-    explanation: 'The Pacific Ocean covers about one-third of the Earth\'s surface.'
-  },
-  {
-    id: 'fallback-4',
-    type: 'multiple_choice',
-    question_text: 'Who wrote "Romeo and Juliet"?',
-    options: ['Charles Dickens', 'William Shakespeare', 'Jane Austen', 'Mark Twain'],
-    correct_answer: 'William Shakespeare',
-    image_url: null,
-    explanation: 'William Shakespeare wrote this famous tragedy in the late 16th century.'
-  },
-  {
-    id: 'fallback-5',
-    type: 'multiple_choice',
-    question_text: 'What is the chemical symbol for gold?',
-    options: ['Ag', 'Au', 'Fe', 'Cu'],
-    correct_answer: 'Au',
-    image_url: null,
-    explanation: 'Au comes from the Latin word for gold, "aurum".'
-  }
-];
+// No demo fallback; rely on DB or explicit AI mode
+const fallbackQuestions: NormalizedQuestion[] = [];
 
 export async function fetchQuestionsFromAI(topic: string, difficulty: string, limit: number): Promise<NormalizedQuestion[]> {
-  const key = (import.meta.env.VITE_QUESTIONS_API_KEY as string | undefined) || "AIzaSyDCmMzVSbSl6zq2Z14i3_SVfT4dhytpQ7g";
+  const key = (import.meta.env.VITE_QUESTIONS_API_KEY as string | undefined);
   try {
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
     const genAI = new GoogleGenerativeAI(key);

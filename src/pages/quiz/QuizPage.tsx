@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -22,21 +23,21 @@ type Question = {
 
 export default function QuizPage() {
   const { toast } = useToast();
+  const location = useLocation();
   const [started, setStarted] = useState(false);
   const [startMode, setStartMode] = useState<'db' | 'ai' | 'auto'>("auto");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const { data: categories } = useQuery<{ category: string; question_count: number }[]>({
+    queryKey: ['categories'],
+    queryFn: async () => {
+      const res = await api.listCategories();
+      return (res as any)?.data || [];
+    },
+  });
   const [topic, setTopic] = useState("");
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('easy');
   const [numQuestions, setNumQuestions] = useState<5 | 10 | 20>(10);
-  const categoryPresets = [
-    { key: 'Technology', emoji: '💻' },
-    { key: 'Science', emoji: '🔬' },
-    { key: 'History', emoji: '🏺' },
-    { key: 'Geography', emoji: '🗺️' },
-    { key: 'Movies & TV', emoji: '🎬' },
-    { key: 'Sports', emoji: '🏅' },
-    { key: 'Random', emoji: '🎲' },
-  ];
+  const categoryPresets = (categories || []).map((c) => ({ key: c.category, emoji: '📚', count: c.question_count }));
 
   const { data: triviaQs, isLoading } = useQuery({
     queryKey: ["topic-questions", topic, difficulty, numQuestions, started, startMode],
@@ -45,7 +46,11 @@ export default function QuizPage() {
       const count = numQuestions;
       const trimmed = topic.trim();
       if (startMode === 'db') {
-        // Use Supabase DB. If no topic, it will return random.
+        // Use Supabase DB. Support category or topic.
+        if (selectedCategory && selectedCategory.trim()) {
+          const res = await api.getQuestionsByCategory(count, selectedCategory, true);
+          return ((res as any)?.data || []) as any[];
+        }
         const dbQs = await fetchQuestionsFromDB(trimmed, difficulty, count);
         return dbQs as any[];
       } else if (startMode === 'ai') {
@@ -71,6 +76,20 @@ export default function QuizPage() {
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [correctMap, setCorrectMap] = useState<Record<string, boolean>>({});
   const [startAt] = useState(() => Date.now());
+
+  // Auto-select category and optionally auto-start via URL params
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const categoryParam = params.get('category');
+    const autoStart = params.get('start');
+    if (categoryParam && categoryParam.trim()) {
+      setSelectedCategory(categoryParam.trim());
+    }
+    if (autoStart === '1') {
+      setStartMode('db');
+      setStarted(true);
+    }
+  }, [location.search]);
 
   const current = questions[index];
   const progress = useMemo(() => (questions.length ? (index / questions.length) * 100 : 0), [index, questions.length]);
@@ -149,6 +168,7 @@ export default function QuizPage() {
                   >
                     <div className="text-2xl mb-1">{c.emoji}</div>
                     <div className="font-medium">{c.key}</div>
+                    <div className="text-xs text-gray-500">{c.count ?? 0} questions</div>
                   </button>
                 ))}
               </div>
@@ -191,9 +211,10 @@ export default function QuizPage() {
             <div className="pt-2 flex gap-2">
               <Button
                 onClick={() => {
-                  // For categories, prefer filtering by selected label if not Random; backend will fallback to random if no matches
-                  const chosen = selectedCategory && selectedCategory !== 'Random' ? selectedCategory : '';
-                  setTopic(chosen || '');
+                  // For categories, pass selected category to backend
+                  const chosen = selectedCategory || '';
+                  setTopic('');
+                  // Store category in selectedCategory; fetch happens in queryFn below
                   setStartMode('db');
                   setStarted(true);
                 }}

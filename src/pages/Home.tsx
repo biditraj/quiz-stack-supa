@@ -27,6 +27,15 @@ export default function Home() {
     queryFn: () => api.getLeaderboard(3),
   });
 
+  // Fetch categories preview
+  const { data: categories, isLoading: loadingCategories } = useQuery<{ category: string; question_count: number }[]>({
+    queryKey: ['categories-preview'],
+    queryFn: async () => {
+      const res = await api.listCategories();
+      return (res as any)?.data || [];
+    },
+  });
+
   const features = [
     {
       icon: Brain,
@@ -178,6 +187,43 @@ export default function Home() {
             </motion.div>
           </div>
         </motion.div>
+      </section>
+
+      {/* Categories Section */}
+      <section className="py-16">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-8"
+          >
+            <h2 className="text-3xl font-bold mb-2">Browse Categories</h2>
+            <p className="text-gray-600 dark:text-gray-300">Pick a category to start a quiz</p>
+          </motion.div>
+
+          {loadingCategories ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="h-20 w-full" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+              {(categories || []).map((c) => (
+                <Link
+                  key={c.category}
+                  to={`/quiz?category=${encodeURIComponent(c.category)}&start=1`}
+                  className="rounded-xl border bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm px-4 py-5 hover:shadow-md transition block text-left"
+                >
+                  <div className="text-sm font-medium">{c.category}</div>
+                  <div className="text-xs text-gray-500">{c.question_count ?? 0} questions</div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
 
       {/* Features Section */}
