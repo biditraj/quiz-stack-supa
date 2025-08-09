@@ -65,23 +65,20 @@ async function acceptChallenge(supabase: any, battleId: string, userId: string) 
 
   if (battleError) throw new Error(`Failed to accept challenge: ${battleError.message}`)
 
-  // Create participant records for both users
-  const { data: battle } = await supabase
-    .from('challenge_battles')
-    .select('challenger_id, opponent_id')
-    .eq('id', battleId)
-    .single()
-
-  if (!battle) throw new Error('Battle not found')
-
-  const { error: participantError } = await supabase
+  // Ensure a participant record exists for the accepting user only (RLS safe)
+  const { data: existing } = await supabase
     .from('battle_participants')
-    .insert([
-      { battle_id: battleId, user_id: battle.challenger_id },
-      { battle_id: battleId, user_id: battle.opponent_id },
-    ])
+    .select('id')
+    .eq('battle_id', battleId)
+    .eq('user_id', userId)
+    .maybeSingle()
 
-  if (participantError) throw new Error(`Failed to create participants: ${participantError.message}`)
+  if (!existing) {
+    const { error: insertErr } = await supabase
+      .from('battle_participants')
+      .insert({ battle_id: battleId, user_id: userId })
+    if (insertErr) throw new Error(`Failed to create participant: ${insertErr.message}`)
+  }
 
   // Log event
   await supabase
@@ -115,6 +112,21 @@ async function joinBattle(supabase: any, battleId: string, userId: string) {
 
   if (battle.status !== 'active') {
     throw new Error('Battle is not active')
+  }
+
+  // Ensure a participant record exists for the joining user (RLS safe)
+  const { data: existing } = await supabase
+    .from('battle_participants')
+    .select('id')
+    .eq('battle_id', battleId)
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (!existing) {
+    const { error: insertErr } = await supabase
+      .from('battle_participants')
+      .insert({ battle_id: battleId, user_id: userId })
+    if (insertErr) throw new Error(`Failed to create participant: ${insertErr.message}`)
   }
 
   // Log join event

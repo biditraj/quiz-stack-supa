@@ -212,11 +212,47 @@ export const challengesApi = {
    * Create challenge only if opponent is currently online
    */
   async createChallengeIfOnline(params: CreateChallengeParams): Promise<string> {
-    const online = await this.isOpponentOnlineByEmail(params.opponentEmail);
-    if (!online) {
+    // First check DB heartbeat (most reliable)
+    const threshold = new Date(Date.now() - 90_000).toISOString();
+    const { data, error } = await supabase
+      .from('online_users')
+      .select('user_id, last_seen, profiles!inner(id, email)')
+      .gt('last_seen', threshold)
+      .eq('profiles.email', params.opponentEmail.toLowerCase());
+    if (!error && Array.isArray(data) && data.length > 0) {
+      return this.createChallenge(params);
+    }
+
+    // Fallback to presence to avoid brief heartbeat gaps
+    const onlinePresence = await this.isOpponentOnlineByEmail(params.opponentEmail);
+    if (!onlinePresence) {
       throw new Error('Opponent is currently offline. Try again when they are online.');
     }
     return this.createChallenge(params);
+  },
+
+  /**
+   * List currently online users from heartbeat table (last 90s)
+   */
+  async getOnlineUsers(): Promise<Array<{ user_id: string; username: string; email: string; last_seen: string }>> {
+    const threshold = new Date(Date.now() - 90_000).toISOString();
+    const { data, error } = await supabase
+      .from('online_users')
+      .select(`
+        user_id,
+        last_seen,
+        profile:profiles!online_users_user_id_fkey(id, username, email)
+      `)
+      .gt('last_seen', threshold)
+      .order('last_seen', { ascending: false });
+    if (error) throw new Error(error.message);
+    const rows = (data as any[]) || [];
+    return rows.map((r) => ({
+      user_id: r.user_id,
+      last_seen: r.last_seen,
+      username: r.profile?.username || '',
+      email: r.profile?.email || '',
+    }));
   },
 
   /**

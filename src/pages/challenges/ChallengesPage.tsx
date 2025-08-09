@@ -361,7 +361,23 @@ export default function ChallengesPage() {
     };
   }, [user?.id]);
 
-  const availableOpponents = useMemo(() => onlineUsers.filter((u) => u.user_id !== user?.id), [onlineUsers, user?.id]);
+  // Combine presence with heartbeat fallback to ensure the modal doesn't show empty when presence sync lags
+  const { data: onlineUsersDb } = useQuery({
+    queryKey: ['online-users-db'],
+    queryFn: challengesApi.getOnlineUsers,
+    refetchInterval: 30000,
+  });
+
+  const availableOpponents = useMemo(() => {
+    const byId = new Map<string, any>();
+    for (const u of onlineUsersDb || []) {
+      if (u.user_id !== user?.id) byId.set(u.user_id, { user_id: u.user_id, username: u.username, email: u.email });
+    }
+    for (const p of onlineUsers || []) {
+      if (p.user_id !== user?.id) byId.set(p.user_id, { user_id: p.user_id, username: p.username, email: p.email });
+    }
+    return Array.from(byId.values());
+  }, [onlineUsers, onlineUsersDb, user?.id]);
 
   // Filter challenges
   const filteredChallenges = challenges?.filter(challenge => {
