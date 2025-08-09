@@ -14,6 +14,18 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_emails: {
+        Row: {
+          email: string
+        }
+        Insert: {
+          email: string
+        }
+        Update: {
+          email?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -37,6 +49,7 @@ export type Database = {
       }
       questions: {
         Row: {
+          category: string
           correct_answer: string
           created_at: string
           id: string
@@ -46,6 +59,7 @@ export type Database = {
           type: Database["public"]["Enums"]["question_type"]
         }
         Insert: {
+          category?: string
           correct_answer: string
           created_at?: string
           id?: string
@@ -55,6 +69,7 @@ export type Database = {
           type: Database["public"]["Enums"]["question_type"]
         }
         Update: {
+          category?: string
           correct_answer?: string
           created_at?: string
           id?: string
@@ -150,6 +165,10 @@ export type Database = {
           image_url: string
         }[]
       }
+      grant_admin_if_whitelisted: {
+        Args: { _user_id: string; _email: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _user_id: string
@@ -166,6 +185,13 @@ export type Database = {
           avg_accuracy: number
           avg_speed: number
           rank: number
+        }[]
+      }
+      list_categories: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          category: string
+          question_count: number
         }[]
       }
     }

@@ -7,7 +7,7 @@ import { componentTagger } from "lovable-tagger";
 export default defineConfig(({ mode }) => ({
   server: {
     // Use Vite defaults for best IDE preview compatibility
-    port: 5173,
+    port: 8080,
     host: true,
   },
   plugins: [
