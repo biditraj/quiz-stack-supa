@@ -2,19 +2,32 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import type { LucideIcon } from 'lucide-react';
 import { 
   Brain, 
   Trophy, 
   Users, 
   Zap, 
   ArrowRight, 
-  Star
+  Star,
+  Cpu,
+  Database,
+  Code2,
+  Calculator,
+  Server,
+  GitBranch,
+  BarChart3,
+  BookOpenText,
+  Sparkles,
+  Crown,
+  Award
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useEffect, useRef } from 'react';
 import gsap from 'gsap';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Home() {
@@ -31,8 +44,25 @@ export default function Home() {
   const { data: categories, isLoading: loadingCategories } = useQuery<{ category: string; question_count: number }[]>({
     queryKey: ['categories-preview'],
     queryFn: async () => {
-      const res = await api.listCategories();
-      return (res as any)?.data || [];
+      try {
+        const res = await api.listCategories();
+        const data = (res as any)?.data || [];
+        if (Array.isArray(data) && data.length > 0) return data;
+      } catch {}
+      // Fallback: compute from questions table directly
+      const { data: qs, error } = await supabase
+        .from('questions')
+        .select('category')
+        .limit(2000);
+      if (error || !Array.isArray(qs)) return [];
+      const map = new Map<string, number>();
+      for (const row of qs as any[]) {
+        const c = String(row?.category || 'General');
+        map.set(c, (map.get(c) || 0) + 1);
+      }
+      return Array.from(map.entries())
+        .map(([category, question_count]) => ({ category, question_count }))
+        .sort((a, b) => a.category.localeCompare(b.category));
     },
   });
 
@@ -58,6 +88,23 @@ export default function Home() {
       description: "Join thousands of learners improving their knowledge every day"
     }
   ];
+
+  // Category icon resolver based on keywords
+  const resolveCategoryConfig = (name: string | undefined | null): { icon: LucideIcon; gradient: string } => {
+    const s = String(name || '').trim().toLowerCase();
+    const contains = (k: string) => s.includes(k);
+    if (contains('operating') || contains('os')) return { icon: Cpu, gradient: 'from-blue-500 to-indigo-600' };
+    if (contains('database') || contains('sql')) return { icon: Database, gradient: 'from-sky-500 to-blue-600' };
+    if (contains('program') || contains('coding') || contains('fundament')) return { icon: Code2, gradient: 'from-indigo-500 to-purple-600' };
+    if (contains('quant') || contains('aptitude') || contains('math') || contains('numer')) return { icon: Calculator, gradient: 'from-emerald-500 to-teal-600' };
+    if (contains('network')) return { icon: Server, gradient: 'from-cyan-500 to-sky-600' };
+    if (contains('algorithm')) return { icon: GitBranch, gradient: 'from-fuchsia-500 to-pink-600' };
+    if (contains('data structure')) return { icon: GitBranch, gradient: 'from-rose-500 to-red-600' };
+    if (contains('logic') || contains('reason')) return { icon: Brain, gradient: 'from-amber-500 to-orange-600' };
+    if (contains('data inter') || contains('interpret') || contains('chart') || contains('stat')) return { icon: BarChart3, gradient: 'from-lime-500 to-green-600' };
+    if (contains('verbal') || contains('english') || contains('vocab')) return { icon: BookOpenText, gradient: 'from-teal-500 to-emerald-600' };
+    return { icon: Sparkles, gradient: 'from-slate-500 to-gray-600' };
+  };
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -190,37 +237,65 @@ export default function Home() {
       </section>
 
       {/* Categories Section */}
-      <section className="py-16">
-        <div className="container mx-auto px-4">
+      <section className="py-20 relative">
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent via-blue-50/40 to-transparent dark:via-blue-950/20" />
+        <div className="container mx-auto px-4 relative">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
-            className="text-center mb-8"
+            className="text-center mb-10"
           >
-            <h2 className="text-3xl font-bold mb-2">Browse Categories</h2>
+            <h2 className="text-3xl font-bold mb-2 bg-gradient-to-r from-gray-900 via-blue-700 to-indigo-700 dark:from-white dark:via-blue-200 dark:to-indigo-200 bg-clip-text text-transparent">
+              Browse Categories
+            </h2>
             <p className="text-gray-600 dark:text-gray-300">Pick a category to start a quiz</p>
           </motion.div>
 
           {loadingCategories ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+            <div className="grid gap-4 max-w-5xl mx-auto" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))' }}>
               {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-20 w-full" />
+                <Skeleton key={i} className="h-24 w-full" />
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
-              {(categories || []).map((c) => (
-                <Link
-                  key={c.category}
-                  to={`/quiz?category=${encodeURIComponent(c.category)}&start=1`}
-                  className="rounded-xl border bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm px-4 py-5 hover:shadow-md transition block text-left"
-                >
-                  <div className="text-sm font-medium">{c.category}</div>
-                  <div className="text-xs text-gray-500">{c.question_count ?? 0} questions</div>
-                </Link>
-              ))}
+            <div className="grid gap-4 max-w-5xl mx-auto" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))' }}>
+              {(categories || []).map((c, idx) => {
+                const cfg = resolveCategoryConfig(c.category);
+                const Icon = cfg.icon;
+                return (
+                  <motion.div
+                    key={c.category}
+                    initial={{ opacity: 0, y: 12 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.45, delay: Math.min(idx * 0.04, 0.25) }}
+                    whileHover={{ y: -6, scale: 1.02 }}
+                  >
+                    <Link
+                      to={`/quiz?category=${encodeURIComponent(c.category)}&start=1`}
+                      className="group relative overflow-hidden rounded-xl border bg-white/80 dark:bg-gray-800/80 backdrop-blur-md p-4 hover:shadow-xl transition block text-left h-full"
+                      aria-label={`Start a quiz in ${c.category}`}
+                    >
+                      <span className="pointer-events-none absolute -right-8 -top-8 h-20 w-20 rounded-full bg-blue-500/10 dark:bg-blue-400/10 blur-xl" />
+                      <div className="flex items-center gap-3 relative">
+                        <div className={`shrink-0 w-11 h-11 rounded-lg bg-gradient-to-r ${cfg.gradient} grid place-items-center text-white shadow-sm`}> 
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold truncate">{c.category}</div>
+                          <div className="text-xs text-gray-500">
+                            {c.question_count ?? 0} {Number(c.question_count) === 1 ? 'question' : 'questions'}
+                          </div>
+                        </div>
+                        <ArrowRight className="w-4 h-4 ml-auto text-gray-400 group-hover:translate-x-0.5 group-hover:text-gray-700 dark:group-hover:text-gray-200 transition" />
+                      </div>
+                      <div className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition bg-gradient-to-br from-transparent via-white/10 to-transparent" />
+                    </Link>
+                  </motion.div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -274,53 +349,74 @@ export default function Home() {
       </section>
 
       {/* Mini Leaderboard Preview */}
-      <section className="py-16">
+      <section className="py-20">
         <div className="container mx-auto px-4">
-          <Card className="max-w-2xl mx-auto bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-gray-200/50 dark:border-gray-700/50">
-            <CardHeader>
+          <Card className="max-w-3xl mx-auto bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
+            <CardHeader className="flex flex-row items-center gap-3">
+              <Crown className="w-5 h-5 text-amber-500" />
               <CardTitle>Top Players</CardTitle>
             </CardHeader>
             <CardContent>
               {loadingLeaderboard ? (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Skeleton className="h-8 w-8 rounded-full" />
-                        <Skeleton className="h-4 w-40" />
+                    <div key={i} className="flex items-center gap-3">
+                      <Skeleton className="h-9 w-9 rounded-full" />
+                      <div className="flex-1">
+                        <Skeleton className="h-4 w-40 mb-2" />
+                        <Skeleton className="h-2 w-full" />
                       </div>
-                      <Skeleton className="h-4 w-16" />
+                      <Skeleton className="h-4 w-14" />
                     </div>
                   ))}
                 </div>
               ) : (
-                <ul className="space-y-3">
-                  {(leaderboard as any)?.data?.length ? (
-                    (leaderboard as any).data.map((row: any, idx: number) => (
-                      <motion.li
-                        key={row.user_id}
-                        initial={{ opacity: 0, scale: 0.98 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.25 }}
-                        className="flex items-center justify-between"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-white grid place-items-center text-xs font-semibold">
-                            {idx + 1}
+                <ul className="space-y-4">
+                  {(() => {
+                    const rows = ((leaderboard as any)?.data || []) as Array<{ username: string; total_score: number; user_id: string }>;
+                    if (!rows.length) {
+                      return (
+                        <div className="text-sm text-gray-600 dark:text-gray-300">No leaderboard data yet. Be the first to play!</div>
+                      );
+                    }
+                    const maxScore = Math.max(...rows.map(r => Number(r.total_score || 0)));
+                    return rows.map((row, idx) => {
+                      const width = maxScore > 0 ? Math.max(8, (Number(row.total_score) / maxScore) * 100) : 8;
+                      const color = idx === 0 ? 'from-amber-400 to-amber-600' : idx === 1 ? 'from-gray-400 to-gray-500' : 'from-orange-400 to-red-500';
+                      return (
+                        <motion.li
+                          key={row.user_id}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.25, delay: idx * 0.05 }}
+                          className="relative"
+                        >
+                          <div className="flex items-center gap-3 mb-1">
+                            <div className={`h-9 w-9 rounded-full bg-gradient-to-br ${color} text-white grid place-items-center text-xs font-semibold`}>{idx + 1}</div>
+                            <span className="font-medium">{row.username}</span>
+                            <span className="ml-auto text-sm text-gray-600 dark:text-gray-300">{row.total_score} pts</span>
                           </div>
-                          <span className="font-medium">{row.username}</span>
-                        </div>
-                        <span className="text-sm text-gray-600 dark:text-gray-300">{row.total_score} pts</span>
-                      </motion.li>
-                    ))
-                  ) : (
-                    <div className="text-sm text-gray-600 dark:text-gray-300">No leaderboard data yet. Be the first to play!</div>
-                  )}
+                          <div className="h-2 w-full rounded-full bg-gray-200/70 dark:bg-gray-700/60 overflow-hidden">
+                            <motion.div
+                              initial={{ width: 0 }}
+                              whileInView={{ width: `${width}%` }}
+                              viewport={{ once: true }}
+                              transition={{ duration: 0.6, ease: 'easeOut' }}
+                              className={`h-full bg-gradient-to-r ${color}`}
+                            />
+                          </div>
+                        </motion.li>
+                      );
+                    });
+                  })()}
                 </ul>
               )}
-              <div className="mt-6 text-right">
-                <Button asChild variant="outline">
-                  <Link to="/leaderboard">See full leaderboard</Link>
+              <div className="mt-8 text-right">
+                <Button asChild variant="outline" className="hover:shadow-md">
+                  <Link to="/leaderboard" className="inline-flex items-center gap-2">
+                    See full leaderboard
+                    <Award className="w-4 h-4" />
+                  </Link>
                 </Button>
               </div>
             </CardContent>

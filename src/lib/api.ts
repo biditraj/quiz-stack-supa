@@ -1,6 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
+import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "@/integrations/supabase/client";
 
 const baseUrl = `${SUPABASE_URL}/functions/v1`;
 
@@ -24,7 +22,7 @@ async function extractResponseMessage(res: Response | undefined) {
 async function request(path: string) {
   const res = await fetch(`${baseUrl}${path}`, {
     headers: {
-      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+      apikey: SUPABASE_PUBLISHABLE_KEY,
     },
   });
   if (!res.ok) {
@@ -71,7 +69,7 @@ export const api = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+          apikey: SUPABASE_PUBLISHABLE_KEY,
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
@@ -99,11 +97,11 @@ export const api = {
     const { data: sess } = await supabase.auth.getSession();
     const token = sess.session?.access_token;
     if (token) {
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/add-question`, {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/add-question`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+            apikey: SUPABASE_PUBLISHABLE_KEY,
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
@@ -160,7 +158,7 @@ export const api = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+          apikey: SUPABASE_PUBLISHABLE_KEY,
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ items }),

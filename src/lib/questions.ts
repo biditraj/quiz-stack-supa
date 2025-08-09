@@ -74,7 +74,10 @@ export async function fetchQuestionsFromDB(topic: string, difficulty: string, li
 const fallbackQuestions: NormalizedQuestion[] = [];
 
 export async function fetchQuestionsFromAI(topic: string, difficulty: string, limit: number): Promise<NormalizedQuestion[]> {
-  const key = (import.meta.env.VITE_QUESTIONS_API_KEY as string | undefined);
+  const key = import.meta.env.VITE_QUESTIONS_API_KEY as string | undefined;
+  if (!key) {
+    return fallbackQuestions.slice(0, limit);
+  }
   try {
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
     const genAI = new GoogleGenerativeAI(key);
@@ -110,7 +113,8 @@ export async function fetchQuestionsFromAI(topic: string, difficulty: string, li
 export async function fetchTopicSuggestions(topic: string): Promise<string[]> {
   const trimmed = (topic || '').trim();
   if (!trimmed) return [];
-  const key = (import.meta.env.VITE_QUESTIONS_API_KEY as string | undefined) || "AIzaSyDCmMzVSbSl6zq2Z14i3_SVfT4dhytpQ7g";
+  const key = import.meta.env.VITE_QUESTIONS_API_KEY as string | undefined;
+  if (!key) return [];
   try {
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
     const genAI = new GoogleGenerativeAI(key);
