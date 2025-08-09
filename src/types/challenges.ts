@@ -31,7 +31,7 @@ export interface ChallengeBattle {
   id: string;
   challenger_id: string;
   opponent_id: string;
-  status: 'pending' | 'active' | 'completed' | 'cancelled' | 'expired';
+  status: 'pending' | 'accepted' | 'active' | 'completed' | 'cancelled' | 'expired';
   category?: string;
   difficulty: 'easy' | 'medium' | 'hard';
   question_count: number;
@@ -72,7 +72,7 @@ export interface BattleEvent {
   id: string;
   battle_id: string;
   user_id: string;
-  event_type: 'joined' | 'answered' | 'completed' | 'left';
+  event_type: 'joined' | 'answered' | 'completed' | 'left' | 'started';
   data: any;
   created_at: string;
 }

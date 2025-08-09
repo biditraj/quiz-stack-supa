@@ -29,6 +29,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ChallengeBattle, BattleAnswer } from '@/types/challenges';
+import { supabase } from '@/integrations/supabase/client';
 
 interface BattleHeaderProps {
   battle: ChallengeBattle;
@@ -316,30 +317,6 @@ export default function BattleInterface() {
     };
   }, [timeRemaining, battleStarted, isCompleting]);
 
-  // Real-time updates for opponent progress
-  useEffect(() => {
-    if (!battleId || !user?.id) return;
-
-    const eventsChannel = challengesApi.subscribeToBattleEvents(battleId, (event) => {
-      if (event.new.event_type === 'answered' && event.new.user_id !== user.id) {
-        setOpponentProgress(prev => prev + 1);
-      }
-    });
-
-    const battleChannel = challengesApi.subscribeToBattleUpdates(battleId, (battle) => {
-      if (battle.new.status === 'active' && !battleStarted) {
-        setBattleStarted(true);
-        startTimeRef.current = Date.now();
-        setTimeRemaining(battle.new.time_limit || 600);
-      }
-    });
-
-    return () => {
-      eventsChannel.unsubscribe();
-      battleChannel.unsubscribe();
-    };
-  }, [battleId, user?.id, battleStarted]);
-
   // Initialize battle state based on status
   useEffect(() => {
     if (battle) {
@@ -360,9 +337,11 @@ export default function BattleInterface() {
     }
   }, [battle]);
 
-  // Real-time subscriptions for synchronized battle updates
+  // Consolidated real-time subscriptions for synchronized battle updates
   useEffect(() => {
-    if (!battleId) return;
+    if (!battleId || !user?.id) return;
+
+    console.log('Setting up real-time subscriptions for battle:', battleId);
 
     const channel = supabase
       .channel(`battle-events-${battleId}`)
@@ -381,6 +360,7 @@ export default function BattleInterface() {
           if (event.event_type === 'started') {
             // Battle started synchronously for both players
             if (!battleStarted) {
+              console.log('Battle started event received, starting battle...');
               setBattleStarted(true);
               startTimeRef.current = Date.now();
               setTimeRemaining(battle?.time_limit || 600);
@@ -402,12 +382,45 @@ export default function BattleInterface() {
           }
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'challenge_battles',
+          filter: `id=eq.${battleId}`,
+        },
+        (payload) => {
+          const updatedBattle = payload.new;
+          console.log('Battle updated:', updatedBattle);
+          
+          if (updatedBattle.status === 'active' && !battleStarted) {
+            console.log('Battle status changed to active, starting battle...');
+            setBattleStarted(true);
+            if (updatedBattle.started_at) {
+              const elapsed = Math.floor((Date.now() - new Date(updatedBattle.started_at).getTime()) / 1000);
+              const remaining = Math.max(0, updatedBattle.time_limit - elapsed);
+              setTimeRemaining(remaining);
+              startTimeRef.current = new Date(updatedBattle.started_at).getTime();
+            } else {
+              setTimeRemaining(updatedBattle.time_limit);
+              startTimeRef.current = Date.now();
+            }
+            toast({ 
+              title: '🚀 Battle Started!', 
+              description: 'Both players are now competing! Good luck!' 
+            });
+            queryClient.invalidateQueries({ queryKey: ['battle', battleId] });
+          }
+        }
+      )
       .subscribe();
 
     return () => {
+      console.log('Cleaning up real-time subscriptions');
       supabase.removeChannel(channel);
     };
-  }, [battleId, battleStarted, user?.id, battle?.time_limit, queryClient, toast]);
+  }, [battleId, user?.id, battleStarted, battle?.time_limit, queryClient, toast]);
 
   const handleAnswerSelect = (questionIndex: number, answer: string) => {
     setSelectedAnswers(prev => ({ ...prev, [questionIndex]: answer }));
