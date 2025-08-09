@@ -226,14 +226,14 @@ export default function BattleInterface() {
   const acceptChallengeMutation = useMutation({
     mutationFn: () => challengesApi.acceptChallenge(battleId!),
     onSuccess: () => {
-      // Don't start immediately - wait for both users to be ready
-      toast({ title: 'Challenge accepted!', description: 'Waiting for both players to be ready...' });
+      // Battle will start automatically when accepted
+      toast({ title: 'Challenge accepted!', description: 'Battle is starting automatically...' });
       queryClient.invalidateQueries({ queryKey: ['battle', battleId] });
     },
     onError: (error: any) => {
       toast({ 
         variant: 'destructive', 
-        title: 'Failed to start battle', 
+        title: 'Failed to accept challenge', 
         description: error.message 
       });
     },
@@ -485,15 +485,10 @@ export default function BattleInterface() {
            !battleStarted;
   };
 
-  const canStartBattle = () => {
-    if (!battle || !user) return false;
-    return battle.status === 'accepted' && !battleStarted;
-  };
-
   const isWaitingForAcceptance = () => {
     if (!battle || !user) return false;
-    return battle.status === 'accepted' && 
-           battle.challenger_id === user.id; // Challenger waits for opponent
+    return battle.status === 'pending' && 
+           battle.challenger_id === user.id; // Challenger waits for opponent to accept
   };
 
   if (isLoading) {
@@ -592,69 +587,23 @@ export default function BattleInterface() {
                     )}
                   </Button>
                 </>
-              ) : canStartBattle() ? (
-                <>
-                  <h3 className="text-2xl font-bold mb-4 text-green-600 dark:text-green-400">
-                    🚀 Ready to Start!
-                  </h3>
-                  <p className="text-gray-600 dark:text-gray-300 mb-4">
-                    Challenge accepted! Both players are ready.
-                  </p>
-                  <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg mb-6">
-                    <p className="text-green-800 dark:text-green-200 text-sm">
-                      ⚡ <strong>Synchronized Start:</strong> When you click "Start Battle", both players will begin at exactly the same time with identical questions!
-                    </p>
-                  </div>
-                  <Button
-                    onClick={() => startSimultaneousBattleMutation.mutate()}
-                    disabled={startSimultaneousBattleMutation.isPending}
-                    size="lg"
-                    className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg"
-                  >
-                    {startSimultaneousBattleMutation.isPending ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                        Starting Battle...
-                      </>
-                    ) : (
-                      <>
-                        <PlayCircle className="w-5 h-5 mr-2" />
-                        Start Battle Now!
-                      </>
-                    )}
-                  </Button>
-                </>
               ) : isWaitingForAcceptance() ? (
                 <>
                   <h3 className="text-2xl font-bold mb-4 text-blue-600 dark:text-blue-400">
-                    ⏳ Challenge Accepted!
+                    ⏳ Waiting for Response
                   </h3>
                   <p className="text-gray-600 dark:text-gray-300 mb-4">
-                    The opponent accepted your challenge! Either player can start when ready.
+                    Your challenge has been sent! The battle will start automatically when your opponent accepts.
                   </p>
                   <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg mb-6">
                     <p className="text-blue-800 dark:text-blue-200 text-sm">
-                      💡 Click "Start Battle" to begin the synchronized challenge for both players.
+                      🚀 <strong>Auto-Start:</strong> When your opponent accepts, both players will begin the battle simultaneously!
                     </p>
                   </div>
-                  <Button
-                    onClick={() => startSimultaneousBattleMutation.mutate()}
-                    disabled={startSimultaneousBattleMutation.isPending}
-                    size="lg"
-                    className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-lg"
-                  >
-                    {startSimultaneousBattleMutation.isPending ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                        Starting Battle...
-                      </>
-                    ) : (
-                      <>
-                        <PlayCircle className="w-5 h-5 mr-2" />
-                        Start Battle Now!
-                      </>
-                    )}
-                  </Button>
+                  <div className="flex items-center justify-center gap-2 text-blue-600 dark:text-blue-400">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Waiting for opponent to accept...
+                  </div>
                 </>
               ) : canJoinBattle() ? (
                 <>

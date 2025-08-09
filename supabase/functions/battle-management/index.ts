@@ -131,13 +131,7 @@ async function acceptChallenge(supabase: any, battleId: string, userId: string) 
 
   if (fetchError) {
     console.error('Failed to fetch battle:', fetchError)
-    
-    // Check if the table doesn't exist
-    if (fetchError.code === '42P01') {
-      throw new Error('Challenge system not set up. Please contact admin to run database migrations.')
-    }
-    
-    throw new Error(`Battle not found: ${fetchError.message} (Code: ${fetchError.code})`)
+    throw new Error(`Battle not found: ${fetchError.message}`)
   }
 
   if (!battle) {
@@ -146,17 +140,17 @@ async function acceptChallenge(supabase: any, battleId: string, userId: string) 
 
   console.log('Battle data:', battle)
 
+  // Check if user is the opponent
   if (battle.opponent_id !== userId) {
-    throw new Error('You are not the opponent of this battle')
+    throw new Error('Only the opponent can accept the challenge')
   }
 
   if (battle.status !== 'pending') {
-    throw new Error(`Cannot accept battle with status: ${battle.status}`)
+    throw new Error(`Cannot accept challenge with status: ${battle.status}`)
   }
 
-  // Update battle status to accepted (not active yet)
-  console.log('Updating battle status to accepted...')
-  const { error: battleError } = await supabase
+  // Accept the challenge first
+  const { error: acceptError } = await supabase
     .from('challenge_battles')
     .update({ 
       status: 'accepted'
@@ -165,60 +159,92 @@ async function acceptChallenge(supabase: any, battleId: string, userId: string) 
     .eq('status', 'pending')
     .eq('opponent_id', userId)
 
-  if (battleError) {
-    console.error('Failed to update battle status:', battleError)
-    throw new Error(`Failed to accept challenge: ${battleError.message}`)
-  }
-
-  console.log('Battle status updated successfully')
-
-  // Ensure a participant record exists for the accepting user only (RLS safe)
-  console.log('Checking for existing participant record...')
-  const { data: existing, error: selectError } = await supabase
-    .from('battle_participants')
-    .select('id')
-    .eq('battle_id', battleId)
-    .eq('user_id', userId)
-    .maybeSingle()
-
-  if (selectError) {
-    console.error('Error checking existing participant:', selectError)
-    throw new Error(`Failed to check participant: ${selectError.message}`)
-  }
-
-  if (!existing) {
-    console.log('Creating participant record...')
-    const { error: insertErr } = await supabase
-      .from('battle_participants')
-      .insert({ battle_id: battleId, user_id: userId })
-    if (insertErr) {
-      console.error('Failed to insert participant:', insertErr)
-      throw new Error(`Failed to create participant: ${insertErr.message}`)
-    }
-    console.log('Participant record created successfully')
-  } else {
-    console.log('Participant record already exists')
-  }
-
-  // Log event
-  console.log('Logging battle event...')
-  const { error: eventError } = await supabase
-    .from('battle_events')
-    .insert({
-      battle_id: battleId,
-      user_id: userId,
-      event_type: 'joined',
-      data: { action: 'accepted_challenge' }
-    })
-
-  if (eventError) {
-    console.error('Failed to log event:', eventError)
-    // Don't throw here, just log the error
+  if (acceptError) {
+    console.error('Failed to accept challenge:', acceptError)
+    throw new Error(`Failed to accept challenge: ${acceptError.message}`)
   }
 
   console.log('Challenge accepted successfully')
+
+  // Create participant record for the opponent
+  const { error: participantError } = await supabase
+    .from('battle_participants')
+    .insert({ 
+      battle_id: battleId, 
+      user_id: userId 
+    })
+
+  if (participantError) {
+    console.error('Failed to create participant record:', participantError)
+    // Don't throw here, challenge was accepted successfully
+  }
+
+  // Now automatically start the battle for both users
+  const startTime = new Date().toISOString()
+  console.log('Auto-starting battle with synchronized time:', startTime)
+  
+  // Update battle status to active
+  const { error: battleError } = await supabase
+    .from('challenge_battles')
+    .update({ 
+      status: 'active', 
+      started_at: startTime
+    })
+    .eq('id', battleId)
+    .eq('status', 'accepted')
+
+  if (battleError) {
+    console.error('Failed to start battle:', battleError)
+    throw new Error(`Failed to start battle: ${battleError.message}`)
+  }
+
+  // Ensure challenger has participant record
+  const { data: participants, error: participantsError } = await supabase
+    .from('battle_participants')
+    .select('user_id')
+    .eq('battle_id', battleId)
+
+  if (!participantsError) {
+    const challengerParticipant = participants?.find(p => p.user_id === battle.challenger_id)
+    if (!challengerParticipant) {
+      console.log('Creating participant record for challenger...')
+      await supabase
+        .from('battle_participants')
+        .insert({ battle_id: battleId, user_id: battle.challenger_id })
+    }
+  }
+
+  // Log synchronized start event for both users
+  const { error: eventError } = await supabase
+    .from('battle_events')
+    .insert([
+      {
+        battle_id: battleId,
+        user_id: battle.challenger_id,
+        event_type: 'started',
+        data: { synchronized_start: startTime, triggered_by: userId, auto_start: true }
+      },
+      {
+        battle_id: battleId,
+        user_id: battle.opponent_id,
+        event_type: 'started',
+        data: { synchronized_start: startTime, triggered_by: userId, auto_start: true }
+      }
+    ])
+
+  if (eventError) {
+    console.error('Failed to log start events:', eventError)
+    // Don't throw here, battle has started successfully
+  }
+
+  console.log('Battle auto-started successfully for both players')
   return new Response(
-    JSON.stringify({ success: true, message: 'Challenge accepted, waiting for both players to be ready' }),
+    JSON.stringify({ 
+      success: true, 
+      message: 'Challenge accepted and battle started automatically for both players',
+      startTime: startTime,
+      questions: battle.questions
+    }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   )
 }
