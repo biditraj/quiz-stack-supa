@@ -225,10 +225,26 @@ export default function BattleInterface() {
   const acceptChallengeMutation = useMutation({
     mutationFn: () => challengesApi.acceptChallenge(battleId!),
     onSuccess: () => {
+      // Don't start immediately - wait for both users to be ready
+      toast({ title: 'Challenge accepted!', description: 'Waiting for both players to be ready...' });
+      queryClient.invalidateQueries({ queryKey: ['battle', battleId] });
+    },
+    onError: (error: any) => {
+      toast({ 
+        variant: 'destructive', 
+        title: 'Failed to start battle', 
+        description: error.message 
+      });
+    },
+  });
+
+  const startSimultaneousBattleMutation = useMutation({
+    mutationFn: () => challengesApi.startBattle(battleId!),
+    onSuccess: () => {
       setBattleStarted(true);
       startTimeRef.current = Date.now();
       setTimeRemaining(battle?.time_limit || 600);
-      toast({ title: 'Battle started!', description: 'Good luck!' });
+      toast({ title: 'Battle started!', description: 'Both players ready - Good luck!' });
       queryClient.invalidateQueries({ queryKey: ['battle', battleId] });
     },
     onError: (error: any) => {
@@ -344,6 +360,55 @@ export default function BattleInterface() {
     }
   }, [battle]);
 
+  // Real-time subscriptions for synchronized battle updates
+  useEffect(() => {
+    if (!battleId) return;
+
+    const channel = supabase
+      .channel(`battle-events-${battleId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'battle_events',
+          filter: `battle_id=eq.${battleId}`,
+        },
+        (payload) => {
+          const event = payload.new;
+          console.log('Received battle event:', event);
+          
+          if (event.event_type === 'started') {
+            // Battle started synchronously for both players
+            if (!battleStarted) {
+              setBattleStarted(true);
+              startTimeRef.current = Date.now();
+              setTimeRemaining(battle?.time_limit || 600);
+              toast({ 
+                title: '🚀 Battle Started!', 
+                description: 'Both players are now competing! Good luck!' 
+              });
+              queryClient.invalidateQueries({ queryKey: ['battle', battleId] });
+            }
+          } else if (event.event_type === 'answered' && event.user_id !== user?.id) {
+            // Opponent answered a question
+            setOpponentProgress(prev => prev + 1);
+            const questionNum = (event.data?.question_index || 0) + 1;
+            toast({
+              title: '⚡ Opponent Progress',
+              description: `Your opponent answered question ${questionNum}!`,
+              duration: 2000
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [battleId, battleStarted, user?.id, battle?.time_limit, queryClient, toast]);
+
   const handleAnswerSelect = (questionIndex: number, answer: string) => {
     setSelectedAnswers(prev => ({ ...prev, [questionIndex]: answer }));
     
@@ -395,7 +460,7 @@ export default function BattleInterface() {
     completeBattleMutation.mutate(results);
   };
 
-  const canStartBattle = () => {
+  const canAcceptChallenge = () => {
     if (!battle || !user) return false;
     return battle.status === 'pending' && battle.opponent_id === user.id;
   };
@@ -405,6 +470,17 @@ export default function BattleInterface() {
     return battle.status === 'active' && 
            (battle.challenger_id === user.id || battle.opponent_id === user.id) &&
            !battleStarted;
+  };
+
+  const canStartBattle = () => {
+    if (!battle || !user) return false;
+    return battle.status === 'accepted' && !battleStarted;
+  };
+
+  const isWaitingForAcceptance = () => {
+    if (!battle || !user) return false;
+    return battle.status === 'accepted' && 
+           battle.challenger_id === user.id; // Challenger waits for opponent
   };
 
   if (isLoading) {
@@ -461,7 +537,7 @@ export default function BattleInterface() {
                 <PlayCircle className="w-10 h-10 text-white" />
               </div>
               
-              {canStartBattle() ? (
+              {canAcceptChallenge() ? (
                 <>
                   <h3 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">
                     Challenge Received!
@@ -499,6 +575,70 @@ export default function BattleInterface() {
                       <>
                         <Sword className="w-5 h-5 mr-2" />
                         Accept Challenge!
+                      </>
+                    )}
+                  </Button>
+                </>
+              ) : canStartBattle() ? (
+                <>
+                  <h3 className="text-2xl font-bold mb-4 text-green-600 dark:text-green-400">
+                    🚀 Ready to Start!
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-300 mb-4">
+                    Challenge accepted! Both players are ready.
+                  </p>
+                  <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg mb-6">
+                    <p className="text-green-800 dark:text-green-200 text-sm">
+                      ⚡ <strong>Synchronized Start:</strong> When you click "Start Battle", both players will begin at exactly the same time with identical questions!
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => startSimultaneousBattleMutation.mutate()}
+                    disabled={startSimultaneousBattleMutation.isPending}
+                    size="lg"
+                    className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white shadow-lg"
+                  >
+                    {startSimultaneousBattleMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                        Starting Battle...
+                      </>
+                    ) : (
+                      <>
+                        <PlayCircle className="w-5 h-5 mr-2" />
+                        Start Battle Now!
+                      </>
+                    )}
+                  </Button>
+                </>
+              ) : isWaitingForAcceptance() ? (
+                <>
+                  <h3 className="text-2xl font-bold mb-4 text-blue-600 dark:text-blue-400">
+                    ⏳ Challenge Accepted!
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-300 mb-4">
+                    The opponent accepted your challenge! Either player can start when ready.
+                  </p>
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg mb-6">
+                    <p className="text-blue-800 dark:text-blue-200 text-sm">
+                      💡 Click "Start Battle" to begin the synchronized challenge for both players.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => startSimultaneousBattleMutation.mutate()}
+                    disabled={startSimultaneousBattleMutation.isPending}
+                    size="lg"
+                    className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-lg"
+                  >
+                    {startSimultaneousBattleMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                        Starting Battle...
+                      </>
+                    ) : (
+                      <>
+                        <PlayCircle className="w-5 h-5 mr-2" />
+                        Start Battle Now!
                       </>
                     )}
                   </Button>

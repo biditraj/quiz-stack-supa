@@ -344,11 +344,22 @@ export const challengesApi = {
   // ========== Battle Actions (via Edge Functions) ==========
 
   /**
-   * Accept a challenge and start the battle
+   * Accept a challenge (doesn't start immediately)
    */
   async acceptChallenge(battleId: string): Promise<ApiResponse<any>> {
     const { data, error } = await supabase.functions.invoke('battle-management', {
       body: { action: 'accept_challenge', battleId }
+    });
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  /**
+   * Start a battle when both users are ready
+   */
+  async startBattle(battleId: string): Promise<ApiResponse<any>> {
+    const { data, error } = await supabase.functions.invoke('battle-management', {
+      body: { action: 'start_battle', battleId }
     });
     if (error) throw new Error(error.message);
     return data;
