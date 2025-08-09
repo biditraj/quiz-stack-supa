@@ -12,6 +12,8 @@ import { api } from "@/lib/api";
 import { fetchQuestionsFromAI, fetchQuestionsFromDB, getQuizQuestions, getTopicQuestions } from "@/lib/questions";
 import { getTriviaQuestions } from "@/lib/trivia";
 import { useToast } from "@/components/ui/use-toast";
+import { Badge } from "@/components/ui/badge";
+import { getLocalQuestionsByCategory } from "@/lib/local-questions";
 
 type Question = {
   id: string;
@@ -48,8 +50,25 @@ export default function QuizPage() {
       if (startMode === 'db') {
         // Use Supabase DB. Support category or topic.
         if (selectedCategory && selectedCategory.trim()) {
-          const res = await api.getQuestionsByCategory(count, selectedCategory, true);
-          return ((res as any)?.data || []) as any[];
+          const [res, local] = await Promise.all([
+            api.getQuestionsByCategory(count, selectedCategory, true),
+            Promise.resolve(getLocalQuestionsByCategory(selectedCategory, count * 2)),
+          ]);
+          const supaList = (((res as any)?.data || []) as any[]);
+          const localList = Array.isArray(local) ? (local as any[]) : [];
+          const seen = new Set<string>();
+          const merged: any[] = [];
+          const addUnique = (arr: any[]) => {
+            for (const q of arr) {
+              const key = String((q as any).question_text || '').trim().toLowerCase();
+              if (!key || seen.has(key)) continue;
+              seen.add(key);
+              merged.push(q);
+            }
+          };
+          addUnique(supaList);
+          addUnique(localList);
+          return merged.slice(0, count) as any[];
         }
         const dbQs = await fetchQuestionsFromDB(trimmed, difficulty, count);
         return dbQs as any[];
@@ -282,6 +301,11 @@ export default function QuizPage() {
           {/* progress bar styled by component */}
         </Progress>
         <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">Question {index + 1} of {questions.length}</div>
+        {selectedCategory && (
+          <div className="mt-2">
+            <Badge variant="secondary">Category: {selectedCategory}</Badge>
+          </div>
+        )}
       </div>
 
       <AnimatePresence mode="wait">
@@ -307,12 +331,16 @@ export default function QuizPage() {
                   onValueChange={(v) => setSelected((s) => ({ ...s, [current.id]: v }))}
                   className="space-y-3"
                 >
-                  {Array.isArray(current.options) && current.options.map((opt: string) => (
-                    <label key={opt} className={`flex items-center gap-3 rounded-md border p-3 cursor-pointer ${isAnswered ? (String(opt) === String((current as any).correct_answer) ? 'border-green-500 bg-green-50/60' : (selected[current.id] === opt ? 'border-red-500 bg-red-50/60' : '')) : ''}`}>
-                      <RadioGroupItem value={opt} />
-                      <span>{opt}</span>
-                    </label>
-                  ))}
+                  {Array.isArray(current.options) && current.options.map((opt: string, idx: number) => {
+                    const letter = String.fromCharCode(65 + idx);
+                    return (
+                      <label key={opt} className={`flex items-center gap-3 rounded-md border p-3 cursor-pointer hover-scale animate-fade-in ${isAnswered ? (String(opt) === String((current as any).correct_answer) ? 'border-green-500 bg-green-50/60' : (selected[current.id] === opt ? 'border-red-500 bg-red-50/60' : '')) : ''}`}>
+                        <RadioGroupItem value={opt} />
+                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs font-medium">{letter}</span>
+                        <span>{opt}</span>
+                      </label>
+                    );
+                  })}
                 </RadioGroup>
               )}
 
