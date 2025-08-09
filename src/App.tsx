@@ -7,7 +7,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { Navbar } from "@/components/layout/Navbar";
-import { Footer } from "@/components/layout/Footer";
+// import { Footer } from "@/components/layout/Footer";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AdminRoute } from "@/components/auth/AdminRoute";
 
@@ -21,6 +21,11 @@ import Leaderboard from "@/pages/leaderboard/Leaderboard";
 import AddQuestion from "@/pages/admin/AddQuestion";
 import Profile from "@/pages/admin/Profile";
 import NotFound from "@/pages/NotFound";
+
+// Challenge Pages
+import ChallengesPage from "@/pages/challenges/ChallengesPage";
+import BattleInterface from "@/components/challenges/BattleInterface";
+import BattleResults from "@/components/challenges/BattleResults";
 
 import "./App.css";
 
@@ -45,7 +50,7 @@ function App() {
                 <main className="flex-1">
                   <AnimatedRoutes />
                 </main>
-                <Footer />
+                {/* Footer removed as requested */}
               </div>
             </Router>
             <Toaster />
@@ -88,6 +93,30 @@ function AnimatedRoutes() {
             element={
               <ProtectedRoute>
                 <Leaderboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/challenges"
+            element={
+              <ProtectedRoute>
+                <ChallengesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/battle/:battleId"
+            element={
+              <ProtectedRoute>
+                <BattleInterface />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/battle/:battleId/results"
+            element={
+              <ProtectedRoute>
+                <BattleResults />
               </ProtectedRoute>
             }
           />

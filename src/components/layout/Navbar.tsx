@@ -19,7 +19,8 @@ import {
   Moon, 
   Computer,
   UserCog,
-  Menu
+  Menu,
+  Sword
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -37,6 +38,7 @@ export const Navbar = () => {
   const navItems = [
     { path: '/', label: 'Home', icon: null },
     { path: '/quiz', label: 'Quiz', icon: Brain, protected: true },
+    { path: '/challenges', label: 'Challenges', icon: Sword, protected: true },
     { path: '/leaderboard', label: 'Leaderboard', icon: Trophy, protected: true },
   ];
 
@@ -76,8 +78,8 @@ export const Navbar = () => {
                   </div>
                   {user && (
                     <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3 bg-gray-50 dark:bg-gray-800/50">
-                      <Avatar className="w-9 h-9">
-                        <AvatarFallback className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm shadow-sm">
+                      <Avatar className="w-9 h-9 rounded-lg">
+                        <AvatarFallback className="rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm shadow-sm">
                           {getInitials(user.email || 'U')}
                         </AvatarFallback>
                       </Avatar>
@@ -220,10 +222,10 @@ export const Navbar = () => {
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className="flex items-center space-x-2 focus-ring"
+                      className="w-9 h-9 p-0 grid place-items-center rounded-lg dark-button focus-ring"
                     >
-                      <Avatar className="w-8 h-8">
-                        <AvatarFallback className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm shadow-sm">
+                      <Avatar className="w-8 h-8 rounded-lg">
+                        <AvatarFallback className="rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-sm shadow-sm">
                           {getInitials(user.email || 'U')}
                         </AvatarFallback>
                       </Avatar>
