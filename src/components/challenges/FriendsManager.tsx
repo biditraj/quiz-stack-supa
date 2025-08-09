@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,9 +29,10 @@ interface FriendCardProps {
   currentUserId: string;
   onChallenge: (friendEmail: string) => void;
   onRemove?: (friendshipId: string) => void;
+  isOnline?: boolean;
 }
 
-const FriendCard: React.FC<FriendCardProps> = ({ friendship, currentUserId, onChallenge, onRemove }) => {
+const FriendCard: React.FC<FriendCardProps> = ({ friendship, currentUserId, onChallenge, onRemove, isOnline = false }) => {
   const friend = friendship.requester_id === currentUserId 
     ? friendship.receiver 
     : friendship.requester;
@@ -52,10 +53,11 @@ const FriendCard: React.FC<FriendCardProps> = ({ friendship, currentUserId, onCh
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Avatar className="w-12 h-12 rounded-lg">
+              <Avatar className="w-12 h-12 rounded-lg relative">
                 <AvatarFallback className="rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold">
                   {getInitials(friend?.username || friend?.email || 'U')}
                 </AvatarFallback>
+                <span className={`absolute -right-1 -bottom-1 w-3 h-3 rounded-full ring-2 ring-white dark:ring-gray-900 ${isOnline ? 'bg-green-500' : 'bg-gray-400'}`} />
               </Avatar>
               <div className="min-w-0">
                 <p className="font-semibold text-gray-900 dark:text-white truncate">
@@ -71,10 +73,11 @@ const FriendCard: React.FC<FriendCardProps> = ({ friendship, currentUserId, onCh
               <Button
                 size="sm"
                 onClick={() => onChallenge(friend?.email || '')}
+                disabled={!isOnline}
                 className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white shadow-sm"
               >
                 <Sword className="w-4 h-4 mr-1" />
-                Challenge
+                {isOnline ? 'Challenge' : 'Offline'}
               </Button>
               
               {onRemove && (
@@ -195,6 +198,8 @@ export default function FriendsManager() {
   const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const presenceChannelRef = useRef<any>(null);
+  const [onlineEmails, setOnlineEmails] = useState<Set<string>>(new Set());
   const { user } = useAuth();
 
   // Queries
@@ -257,7 +262,7 @@ export default function FriendsManager() {
 
   const createChallengeMutation = useMutation({
     mutationFn: ({ opponentEmail, difficulty }: { opponentEmail: string; difficulty: 'easy' | 'medium' | 'hard' }) =>
-      challengesApi.createChallenge({
+      challengesApi.createChallengeIfOnline({
         opponentEmail,
         difficulty,
         questionCount: 10
@@ -351,6 +356,24 @@ export default function FriendsManager() {
     return friend?.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
            friend?.email.toLowerCase().includes(searchQuery.toLowerCase());
   }) || [];
+
+  // Presence subscription to track online friends
+  useEffect(() => {
+    let isMounted = true;
+    (async () => {
+      const channel = await challengesApi.connectAvailability((state) => {
+        if (!isMounted) return;
+        const flat = Object.values(state as Record<string, any[]>).flat();
+        const emails = new Set<string>(flat.map((p: any) => String(p.email || '').toLowerCase()));
+        setOnlineEmails(emails);
+      });
+      presenceChannelRef.current = channel;
+    })();
+    return () => {
+      isMounted = false;
+      if (presenceChannelRef.current) challengesApi.disconnectAvailability(presenceChannelRef.current);
+    };
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -500,6 +523,7 @@ export default function FriendsManager() {
                     key={friendship.id}
                     friendship={friendship}
                     currentUserId={user?.id || ''}
+                    isOnline={Boolean(((friendship.requester_id === (user?.id || '')) ? friendship.receiver?.email : friendship.requester?.email) && onlineEmails.has(String((friendship.requester_id === (user?.id || '')) ? friendship.receiver?.email : friendship.requester?.email).toLowerCase()))}
                     onChallenge={handleChallengeFriend}
                     onRemove={handleRemoveFriend}
                   />
