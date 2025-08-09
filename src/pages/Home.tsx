@@ -20,7 +20,8 @@ import {
   BookOpenText,
   Sparkles,
   Crown,
-  Award
+  Award,
+  Target
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useEffect, useRef } from 'react';
@@ -29,6 +30,17 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
+
+// Types
+type LeaderboardRow = {
+  username: string;
+  total_score: number;
+  user_id: string;
+  avg_accuracy?: number;
+  avg_speed?: number;
+};
+
+type ListCategoriesResponse = { data?: { category: string; question_count: number }[] } | null | undefined;
 
 export default function Home() {
   const { user } = useAuth();
@@ -46,9 +58,11 @@ export default function Home() {
     queryFn: async () => {
       try {
         const res = await api.listCategories();
-        const data = (res as any)?.data || [];
+        const data = (res as ListCategoriesResponse)?.data ?? [];
         if (Array.isArray(data) && data.length > 0) return data;
-      } catch {}
+      } catch {
+        // Ignore errors and fallback to database query
+      }
       // Fallback: compute from questions table directly
       const { data: qs, error } = await supabase
         .from('questions')
@@ -56,7 +70,7 @@ export default function Home() {
         .limit(2000);
       if (error || !Array.isArray(qs)) return [];
       const map = new Map<string, number>();
-      for (const row of qs as any[]) {
+      for (const row of (qs as Array<{ category?: string }>)) {
         const c = String(row?.category || 'General');
         map.set(c, (map.get(c) || 0) + 1);
       }
@@ -148,32 +162,24 @@ export default function Home() {
           className="container mx-auto px-4 relative z-10"
         >
           <div className="text-center max-w-4xl mx-auto">
-            <motion.div
-              variants={itemVariants}
-              className="inline-flex items-center gap-2 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm px-4 py-2 rounded-full border border-gray-200 dark:border-gray-700 mb-6"
-            >
-              <Star className="w-4 h-4 text-yellow-500" />
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Join 10,000+ quiz enthusiasts
-              </span>
-            </motion.div>
 
-             <motion.h1
+            <motion.h1
               variants={itemVariants}
-              className="text-4xl lg:text-6xl font-bold mb-6 bg-gradient-to-r from-gray-900 via-blue-800 to-indigo-800 dark:from-white dark:via-blue-200 dark:to-indigo-200 bg-clip-text text-transparent"
+              className="text-4xl lg:text-6xl font-bold mb-6 bg-gradient-to-r from-gray-900 via-blue-800 to-indigo-800 dark:from-white dark:via-blue-200 dark:to-indigo-200 bg-clip-text text-transparent animate-gradient"
             >
               Master Your Knowledge with
               <br />
-              <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent animate-gradient">
                 Interactive Quizzes
               </span>
             </motion.h1>
 
-            {/* Decorative GSAP orbit animation */}
+            {/* Decorative GSAP orbit animation - enhanced */}
             <div ref={orbitRef} className="relative h-0">
               <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2">
                 <div className="relative h-0">
                   <span className="orbit-dot inline-block h-2 w-2 rounded-full bg-amber-500 shadow-[0_0_12px_rgba(245,158,11,.8)]" />
+                  <span className="orbit-dot inline-block h-2 w-2 rounded-full bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,.8)] ml-6" />
                 </div>
               </div>
             </div>
@@ -182,8 +188,7 @@ export default function Home() {
               variants={itemVariants}
               className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-2xl mx-auto leading-relaxed"
             >
-              Test your skills with our comprehensive quiz platform. Real-time scoring, 
-              detailed analytics, and competitive leaderboards await you.
+              Test your skills with real-time scoring, detailed analytics, and competitive leaderboards.
             </motion.p>
 
             <motion.div
@@ -348,79 +353,176 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Mini Leaderboard Preview */}
+      {/* LeetCode-Inspired Leaderboard Preview */}
       <section className="py-20">
         <div className="container mx-auto px-4">
-          <Card className="max-w-3xl mx-auto bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-gray-200/50 dark:border-gray-700/50 overflow-hidden">
-            <CardHeader className="flex flex-row items-center gap-3">
-              <Crown className="w-5 h-5 text-amber-500" />
-              <CardTitle>Top Players</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loadingLeaderboard ? (
-                <div className="space-y-4">
-                  {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <Skeleton className="h-9 w-9 rounded-full" />
-                      <div className="flex-1">
-                        <Skeleton className="h-4 w-40 mb-2" />
-                        <Skeleton className="h-2 w-full" />
-                      </div>
-                      <Skeleton className="h-4 w-14" />
+          <div className="max-w-4xl mx-auto">
+            <div className="text-center mb-12">
+              <motion.h2
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6 }}
+                className="text-3xl lg:text-4xl font-bold dark-text mb-4"
+              >
+                Global Leaderboard
+              </motion.h2>
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: 0.1 }}
+                className="text-lg dark-text-secondary max-w-2xl mx-auto"
+              >
+                Compete with the best and climb the rankings
+              </motion.p>
+            </div>
+
+            <Card className="glass-light shadow-dark overflow-hidden border-0">
+              <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 flex items-center justify-center">
+                      <Crown className="w-5 h-5 text-white" />
                     </div>
-                  ))}
+                    <div>
+                      <CardTitle className="dark-text text-xl">Top Performers</CardTitle>
+                      <p className="text-sm dark-text-muted">Real-time rankings</p>
+                    </div>
+                  </div>
+                  <Button asChild variant="outline" className="dark-button focus-ring shadow-sm">
+                    <Link to="/leaderboard" className="inline-flex items-center gap-2">
+                      View All
+                      <Award className="w-4 h-4" />
+                    </Link>
+                  </Button>
                 </div>
-              ) : (
-                <ul className="space-y-4">
-                  {(() => {
-                    const rows = ((leaderboard as any)?.data || []) as Array<{ username: string; total_score: number; user_id: string }>;
-                    if (!rows.length) {
-                      return (
-                        <div className="text-sm text-gray-600 dark:text-gray-300">No leaderboard data yet. Be the first to play!</div>
-                      );
-                    }
-                    const maxScore = Math.max(...rows.map(r => Number(r.total_score || 0)));
-                    return rows.map((row, idx) => {
-                      const width = maxScore > 0 ? Math.max(8, (Number(row.total_score) / maxScore) * 100) : 8;
-                      const color = idx === 0 ? 'from-amber-400 to-amber-600' : idx === 1 ? 'from-gray-400 to-gray-500' : 'from-orange-400 to-red-500';
-                      return (
-                        <motion.li
-                          key={row.user_id}
-                          initial={{ opacity: 0, y: 8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.25, delay: idx * 0.05 }}
-                          className="relative"
-                        >
-                          <div className="flex items-center gap-3 mb-1">
-                            <div className={`h-9 w-9 rounded-full bg-gradient-to-br ${color} text-white grid place-items-center text-xs font-semibold`}>{idx + 1}</div>
-                            <span className="font-medium">{row.username}</span>
-                            <span className="ml-auto text-sm text-gray-600 dark:text-gray-300">{row.total_score} pts</span>
+              </CardHeader>
+              
+              <CardContent className="p-0">
+                {loadingLeaderboard ? (
+                  <div className="p-4 sm:p-6 space-y-4">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="flex items-center gap-4 p-3 sm:p-4 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                        <Skeleton className="h-10 w-10 sm:h-12 sm:w-12 rounded-full" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-4 w-28 sm:w-32" />
+                          <Skeleton className="h-3 w-20 sm:w-24" />
+                        </div>
+                        <div className="flex gap-2">
+                          <Skeleton className="h-7 w-14 sm:h-8 sm:w-16 rounded-full" />
+                          <Skeleton className="h-7 w-14 sm:h-8 sm:w-16 rounded-full" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 sm:p-6">
+                    {(() => {
+                      const rows: LeaderboardRow[] = (((leaderboard as { data?: LeaderboardRow[] } | undefined)?.data) ?? []);
+                      if (!rows.length) {
+                        return (
+                          <div className="text-center py-12">
+                            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                              <Trophy className="w-8 h-8 text-gray-400" />
+                            </div>
+                            <h3 className="text-lg font-semibold dark-text mb-2">No Rankings Yet</h3>
+                            <p className="text-sm dark-text-secondary">Be the first to complete a quiz and claim the top spot!</p>
                           </div>
-                          <div className="h-2 w-full rounded-full bg-gray-200/70 dark:bg-gray-700/60 overflow-hidden">
-                            <motion.div
-                              initial={{ width: 0 }}
-                              whileInView={{ width: `${width}%` }}
-                              viewport={{ once: true }}
-                              transition={{ duration: 0.6, ease: 'easeOut' }}
-                              className={`h-full bg-gradient-to-r ${color}`}
-                            />
-                          </div>
-                        </motion.li>
+                        );
+                      }
+                      
+                      return (
+                        <div className="space-y-3">
+                          {rows.map((row: LeaderboardRow, idx) => {
+                            const isTop3 = idx < 3;
+                            const rankColors = [
+                              'from-yellow-400 to-amber-500', // 1st - Gold
+                              'from-gray-300 to-gray-400',    // 2nd - Silver  
+                              'from-amber-600 to-orange-700', // 3rd - Bronze
+                              'from-blue-500 to-indigo-600'   // 4th+ - Blue
+                            ];
+                            const rankColor = rankColors[Math.min(idx, 3)];
+                            
+                            return (
+                              <motion.div
+                                key={row.user_id}
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ duration: 0.3, delay: idx * 0.1 }}
+                                className={`group relative p-3 sm:p-4 rounded-xl border transition-all duration-200 hover:shadow-md ${
+                                  isTop3 
+                                    ? 'bg-gradient-to-r from-white to-gray-50 dark:from-gray-800 dark:to-gray-900 border-amber-200 dark:border-amber-700 shadow-sm' 
+                                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                                }`}
+                              >
+                                <div className="flex items-center gap-4">
+                                  {/* Rank Badge */}
+                                  <div className={`relative flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-r ${rankColor} flex items-center justify-center shadow-lg`}>
+                                    {isTop3 && (
+                                      <div className="absolute inset-0 rounded-full bg-white/20 animate-pulse" />
+                                    )}
+                                    <span className="text-white font-bold text-sm">
+                                      {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
+                                    </span>
+                                  </div>
+                                  
+                                  {/* User Info */}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <h3 className="font-semibold dark-text truncate text-sm sm:text-base">{row.username}</h3>
+                                      {isTop3 && (
+                                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-medium">
+                                          Top {idx + 1}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm dark-text-secondary">
+                                      <span className="flex items-center gap-1">
+                                        <Trophy className="w-4 h-4 text-amber-500" />
+                                        {row.total_score} pts
+                                      </span>
+                                      <span className="flex items-center gap-1">
+                                        <Target className="w-4 h-4 text-green-500" />
+                                        {Math.round(((row.avg_accuracy || 0) * 100))}%
+                                      </span>
+                                      <span className="flex items-center gap-1">
+                                        <Zap className="w-4 h-4 text-blue-500" />
+                                        {Math.round(Number(row.avg_speed || 0))} q/min
+                                      </span>
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Score Display */}
+                                  <div className="flex-shrink-0 text-right">
+                                    <div className="text-xl sm:text-2xl font-bold dark-text">
+                                      {row.total_score}
+                                    </div>
+                                    <div className="text-xs dark-text-muted">points</div>
+                                  </div>
+                                </div>
+                                
+                                {/* Progress Bar */}
+                                <div className="mt-3 h-1.5 sm:h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                  <motion.div
+                                    initial={{ width: 0 }}
+                                    whileInView={{ width: `${Math.max(5, (Number(row.total_score) / Math.max(...rows.map(r => Number(r.total_score || 0)))) * 100)}%` }}
+                                    viewport={{ once: true }}
+                                    transition={{ duration: 0.8, ease: 'easeOut' }}
+                                    className={`h-full bg-gradient-to-r ${rankColor} rounded-full`}
+                                  />
+                                </div>
+                              </motion.div>
+                            );
+                          })}
+                        </div>
                       );
-                    });
-                  })()}
-                </ul>
-              )}
-              <div className="mt-8 text-right">
-                <Button asChild variant="outline" className="hover:shadow-md">
-                  <Link to="/leaderboard" className="inline-flex items-center gap-2">
-                    See full leaderboard
-                    <Award className="w-4 h-4" />
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                    })()}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </section>
 

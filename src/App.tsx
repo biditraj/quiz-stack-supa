@@ -19,6 +19,7 @@ import ResetPassword from "@/pages/auth/ResetPassword";
 import QuizPage from "@/pages/quiz/QuizPage";
 import Leaderboard from "@/pages/leaderboard/Leaderboard";
 import AddQuestion from "@/pages/admin/AddQuestion";
+import Profile from "@/pages/admin/Profile";
 import NotFound from "@/pages/NotFound";
 
 import "./App.css";
@@ -95,6 +96,14 @@ function AnimatedRoutes() {
             element={
               <AdminRoute>
                 <AddQuestion />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/profile"
+            element={
+              <AdminRoute>
+                <Profile />
               </AdminRoute>
             }
           />

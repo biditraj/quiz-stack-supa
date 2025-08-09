@@ -46,8 +46,6 @@ export const api = {
     params.set('n', String(n));
     if (category && category.trim()) params.set('category', category.trim());
     if (includeAnswers) params.set('include_answers', '1');
-    // default to multiple_choice to avoid mixed types unless caller overrides
-    params.set('type', 'multiple_choice');
     return request(`/get-questions?${params.toString()}`);
   },
   listCategories: async () => request(`/list-categories`),
