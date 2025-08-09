@@ -2,6 +2,7 @@
 create extension if not exists pgcrypto;
 
 -- 1) Enum for question types
+drop type if exists public.question_type cascade;
 create type public.question_type as enum ('multiple_choice', 'true_false', 'fill_blank', 'image_based');
 
 -- 2) Profiles table
@@ -15,11 +16,13 @@ create table if not exists public.profiles (
 alter table public.profiles enable row level security;
 
 -- Policies: users can read/update their own profile
-create policy if not exists "Users can view their own profile"
+drop policy if exists "Users can view their own profile" on public.profiles;
+create policy "Users can view their own profile"
   on public.profiles for select
   using (auth.uid() = id);
 
-create policy if not exists "Users can update their own profile"
+drop policy if exists "Users can update their own profile" on public.profiles;
+create policy "Users can update their own profile"
   on public.profiles for update
   using (auth.uid() = id);
 
@@ -59,7 +62,8 @@ create trigger on_auth_user_created
   for each row execute procedure public.handle_new_user();
 
 -- 3) Roles system for admin-only operations
-create type if not exists public.app_role as enum ('admin', 'moderator', 'user');
+drop type if exists public.app_role cascade;
+create type public.app_role as enum ('admin', 'moderator', 'user');
 
 create table if not exists public.user_roles (
   id uuid primary key default gen_random_uuid(),
@@ -70,7 +74,8 @@ create table if not exists public.user_roles (
 
 alter table public.user_roles enable row level security;
 
-create policy if not exists "Users can read their own roles" on public.user_roles
+drop policy if exists "Users can read their own roles" on public.user_roles;
+create policy "Users can read their own roles" on public.user_roles
 for select using (auth.uid() = user_id);
 
 -- Do not create insert/update/delete policies to keep management restricted to triggers/service role/admin tooling
@@ -102,20 +107,24 @@ create table if not exists public.questions (
 alter table public.questions enable row level security;
 
 -- Allow everyone to read questions (for gameplay)
-create policy if not exists "Anyone can read questions"
+drop policy if exists "Anyone can read questions" on public.questions;
+create policy "Anyone can read questions"
   on public.questions for select using (true);
 
 -- Only admins can write questions
-create policy if not exists "Admins can insert questions"
+drop policy if exists "Admins can insert questions" on public.questions;
+create policy "Admins can insert questions"
   on public.questions for insert
   with check (public.has_role(auth.uid(), 'admin'));
 
-create policy if not exists "Admins can update questions"
+drop policy if exists "Admins can update questions" on public.questions;
+create policy "Admins can update questions"
   on public.questions for update
   using (public.has_role(auth.uid(), 'admin'))
   with check (public.has_role(auth.uid(), 'admin'));
 
-create policy if not exists "Admins can delete questions"
+drop policy if exists "Admins can delete questions" on public.questions;
+create policy "Admins can delete questions"
   on public.questions for delete
   using (public.has_role(auth.uid(), 'admin'));
 
@@ -156,11 +165,13 @@ before insert or update on public.quiz_attempts
 for each row execute procedure public.validate_quiz_attempt();
 
 -- RLS policies for quiz_attempts
-create policy if not exists "Users can insert their own attempts"
+drop policy if exists "Users can insert their own attempts" on public.quiz_attempts;
+create policy "Users can insert their own attempts"
   on public.quiz_attempts for insert
   with check (auth.uid() = user_id);
 
-create policy if not exists "Users can view their own attempts"
+drop policy if exists "Users can view their own attempts" on public.quiz_attempts;
+create policy "Users can view their own attempts"
   on public.quiz_attempts for select
   using (auth.uid() = user_id);
 

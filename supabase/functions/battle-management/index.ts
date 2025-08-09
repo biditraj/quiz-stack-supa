@@ -12,21 +12,43 @@ serve(async (req) => {
   }
 
   try {
+    console.log('Battle management request received:', req.method)
+    
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { auth: { persistSession: false } }
     )
 
-    const authHeader = req.headers.get('Authorization')!
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      throw new Error('Authorization header missing')
+    }
+    
     const token = authHeader.replace('Bearer ', '')
-    const { data: user } = await supabase.auth.getUser(token)
+    console.log('Getting user from token...')
+    const { data: user, error: authError } = await supabase.auth.getUser(token)
 
-    if (!user.user) {
-      throw new Error('Unauthorized')
+    if (authError) {
+      console.error('Auth error:', authError)
+      throw new Error(`Authentication failed: ${authError.message}`)
     }
 
-    const { action, battleId, data } = await req.json()
+    if (!user.user) {
+      throw new Error('No user found in token')
+    }
+
+    console.log('User authenticated:', user.user.id)
+
+    const requestBody = await req.json()
+    console.log('Request body:', requestBody)
+    const { action, battleId, data } = requestBody
+
+    if (!action || !battleId) {
+      throw new Error('Missing required fields: action, battleId')
+    }
+
+    console.log(`Processing action: ${action} for battle: ${battleId}`)
 
     switch (action) {
       case 'join_battle':
@@ -38,9 +60,10 @@ serve(async (req) => {
       case 'accept_challenge':
         return await acceptChallenge(supabase, battleId, user.user.id)
       default:
-        throw new Error('Invalid action')
+        throw new Error(`Invalid action: ${action}`)
     }
   } catch (error) {
+    console.error('Battle management error:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
@@ -52,7 +75,36 @@ serve(async (req) => {
 })
 
 async function acceptChallenge(supabase: any, battleId: string, userId: string) {
+  console.log(`AcceptChallenge: battleId=${battleId}, userId=${userId}`)
+  
+  // First, verify the battle exists and user is the opponent
+  const { data: battle, error: fetchError } = await supabase
+    .from('challenge_battles')
+    .select('*')
+    .eq('id', battleId)
+    .single()
+
+  if (fetchError) {
+    console.error('Failed to fetch battle:', fetchError)
+    throw new Error(`Battle not found: ${fetchError.message}`)
+  }
+
+  if (!battle) {
+    throw new Error('Battle not found')
+  }
+
+  console.log('Battle data:', battle)
+
+  if (battle.opponent_id !== userId) {
+    throw new Error('You are not the opponent of this battle')
+  }
+
+  if (battle.status !== 'pending') {
+    throw new Error(`Cannot accept battle with status: ${battle.status}`)
+  }
+
   // Update battle status to active and add started timestamp
+  console.log('Updating battle status to active...')
   const { error: battleError } = await supabase
     .from('challenge_battles')
     .update({ 
@@ -63,25 +115,44 @@ async function acceptChallenge(supabase: any, battleId: string, userId: string) 
     .eq('status', 'pending')
     .eq('opponent_id', userId)
 
-  if (battleError) throw new Error(`Failed to accept challenge: ${battleError.message}`)
+  if (battleError) {
+    console.error('Failed to update battle status:', battleError)
+    throw new Error(`Failed to accept challenge: ${battleError.message}`)
+  }
+
+  console.log('Battle status updated successfully')
 
   // Ensure a participant record exists for the accepting user only (RLS safe)
-  const { data: existing } = await supabase
+  console.log('Checking for existing participant record...')
+  const { data: existing, error: selectError } = await supabase
     .from('battle_participants')
     .select('id')
     .eq('battle_id', battleId)
     .eq('user_id', userId)
     .maybeSingle()
 
+  if (selectError) {
+    console.error('Error checking existing participant:', selectError)
+    throw new Error(`Failed to check participant: ${selectError.message}`)
+  }
+
   if (!existing) {
+    console.log('Creating participant record...')
     const { error: insertErr } = await supabase
       .from('battle_participants')
       .insert({ battle_id: battleId, user_id: userId })
-    if (insertErr) throw new Error(`Failed to create participant: ${insertErr.message}`)
+    if (insertErr) {
+      console.error('Failed to insert participant:', insertErr)
+      throw new Error(`Failed to create participant: ${insertErr.message}`)
+    }
+    console.log('Participant record created successfully')
+  } else {
+    console.log('Participant record already exists')
   }
 
   // Log event
-  await supabase
+  console.log('Logging battle event...')
+  const { error: eventError } = await supabase
     .from('battle_events')
     .insert({
       battle_id: battleId,
@@ -90,6 +161,12 @@ async function acceptChallenge(supabase: any, battleId: string, userId: string) 
       data: { action: 'accepted_challenge' }
     })
 
+  if (eventError) {
+    console.error('Failed to log event:', eventError)
+    // Don't throw here, just log the error
+  }
+
+  console.log('Challenge accepted successfully')
   return new Response(
     JSON.stringify({ success: true, message: 'Challenge accepted and battle started' }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
