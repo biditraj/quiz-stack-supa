@@ -1,0 +1,19 @@
+project_id = "kxnzhrzfhoxibdzvikyj"
+
+[functions.get-leaderboard]
+verify_jwt = false
+
+[functions.get-questions]
+verify_jwt = false
+
+[functions.submit-quiz]
+verify_jwt = true
+
+[functions.add-question]
+verify_jwt = false
+
+[functions.list-categories]
+verify_jwt = false
+
+[functions.bulk-import-questions]
+verify_jwt = false

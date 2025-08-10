@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Node modules
 node_modules/
 frontend/node_modules/
@@ -12,10 +13,16 @@ backend/build/
 backend/dist/
 
 # Logs
+=======
+# Logs
+logs
+*.log
+>>>>>>> 649c652d79593ea104a69e6edc740d5111d9ac78
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+<<<<<<< HEAD
 
 # OS files
 .DS_Store
@@ -28,3 +35,22 @@ Thumbs.db
 
 # VS Code settings
 .vscode/
+=======
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+>>>>>>> 649c652d79593ea104a69e6edc740d5111d9ac78
