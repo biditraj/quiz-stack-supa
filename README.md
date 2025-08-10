@@ -66,6 +66,3 @@ The project uses Supabase with:
 - Friend challenges system
 - Real-time presence
 
-## 📝 License
-
-MIT
