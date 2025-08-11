@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -7,52 +7,43 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Separator } from '@/components/ui/separator';
 import { 
-  Clock, 
-  Users, 
   Trophy, 
   Target, 
-  Zap, 
   Sword, 
   PlayCircle, 
   CheckCircle,
   ArrowLeft,
   ArrowRight,
   Timer,
-  UserCheck,
   Loader2
 } from 'lucide-react';
 import { simpleBattleApi } from '@/lib/simple-battle-api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
-import { motion, AnimatePresence } from 'framer-motion';
-import type { ChallengeBattle, BattleAnswer } from '@/types/challenges';
+import { motion } from 'framer-motion';
 import { supabase } from '@/integrations/supabase/client';
 
-interface BattleHeaderProps {
-  battle: ChallengeBattle;
+interface SimpleBattleHeaderProps {
+  battle: any;
   currentUserId: string;
   timeRemaining: number;
-  opponentProgress: number;
+  myScore: number;
+  opponentScore: number;
   isStarted: boolean;
 }
 
-const BattleHeader: React.FC<BattleHeaderProps> = ({ 
+const SimpleBattleHeader: React.FC<SimpleBattleHeaderProps> = ({ 
   battle, 
   currentUserId, 
   timeRemaining, 
-  opponentProgress,
+  myScore,
+  opponentScore,
   isStarted 
 }) => {
   const isChallenger = battle.challenger_id === currentUserId;
   const opponent = isChallenger ? battle.opponent : battle.challenger;
   
-  const getInitials = (name: string) => {
-    return name.substring(0, 2).toUpperCase();
-  };
-
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -60,25 +51,22 @@ const BattleHeader: React.FC<BattleHeaderProps> = ({
   };
 
   return (
-    <Card className="mb-6 border-orange-200 dark:border-orange-800 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20">
+    <Card className="mb-6 border-blue-200 dark:border-blue-800 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-r from-orange-500 to-red-600 flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
               <Sword className="w-6 h-6 text-white" />
             </div>
             <div>
               <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
-                Battle vs {opponent?.username}
-                <Badge 
-                  variant="outline" 
-                  className="bg-white dark:bg-gray-800 border-orange-300 dark:border-orange-700"
-                >
-                  {battle.difficulty}
+                Battle vs {opponent?.username || 'Opponent'}
+                <Badge variant="outline" className="bg-white dark:bg-gray-800 border-blue-300 dark:border-blue-700">
+                  {battle.difficulty || 'Medium'}
                 </Badge>
               </CardTitle>
               <p className="text-sm text-gray-600 dark:text-gray-300">
-                {battle.category || 'Mixed Categories'} • {battle.question_count} questions
+                {battle.category || 'Mixed Categories'} • {battle.question_count || 10} questions
               </p>
             </div>
           </div>
@@ -86,24 +74,29 @@ const BattleHeader: React.FC<BattleHeaderProps> = ({
           <div className="flex items-center gap-6">
             {/* Timer */}
             <div className="text-center">
-              <div className="flex items-center gap-2 text-lg font-bold text-orange-700 dark:text-orange-300">
+              <div className="flex items-center gap-2 text-lg font-bold text-blue-700 dark:text-blue-300">
                 <Timer className="w-5 h-5" />
-                {isStarted ? formatTime(timeRemaining) : formatTime(battle.time_limit)}
+                {isStarted ? formatTime(timeRemaining) : formatTime(battle.time_limit || 600)}
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {isStarted ? 'Time Remaining' : 'Time Limit'}
               </p>
             </div>
             
-            {/* Opponent Progress */}
-            <div className="text-center">
-              <div className="flex items-center gap-2 text-lg font-bold text-blue-700 dark:text-blue-300">
-                <UserCheck className="w-5 h-5" />
-                {opponentProgress}/{battle.question_count}
+            {/* Scores */}
+            <div className="flex items-center gap-4">
+              <div className="text-center">
+                <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                  {myScore}
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Your Score</p>
               </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                {opponent?.username} Progress
-              </p>
+              <div className="text-center">
+                <div className="text-lg font-bold text-red-600 dark:text-red-400">
+                  {opponentScore}
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Opponent</p>
+              </div>
             </div>
           </div>
         </div>
@@ -112,7 +105,7 @@ const BattleHeader: React.FC<BattleHeaderProps> = ({
   );
 };
 
-interface QuestionDisplayProps {
+interface SimpleQuestionDisplayProps {
   question: any;
   questionIndex: number;
   totalQuestions: number;
@@ -121,7 +114,7 @@ interface QuestionDisplayProps {
   disabled?: boolean;
 }
 
-const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
+const SimpleQuestionDisplay: React.FC<SimpleQuestionDisplayProps> = ({
   question,
   questionIndex,
   totalQuestions,
@@ -129,6 +122,8 @@ const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
   onAnswerSelect,
   disabled = false
 }) => {
+  if (!question) return null;
+
   return (
     <Card className="mb-6">
       <CardHeader>
@@ -138,66 +133,38 @@ const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
           </Badge>
           <div className="flex items-center gap-2 text-sm text-gray-500">
             <Target className="w-4 h-4" />
-            Multiple Choice
+            {question.type || 'multiple_choice'}
           </div>
         </div>
         <CardTitle className="text-lg leading-relaxed">
-          {question.question_text}
+          {question.question_text || question.text || 'Question text not available'}
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {question.image_url && (
-          <div className="mb-6">
-            <img 
-              src={question.image_url} 
-              alt="Question" 
-              className="max-w-full h-auto rounded-lg border border-gray-200 dark:border-gray-700"
-            />
-          </div>
-        )}
-        
         <RadioGroup
-          value={selectedAnswer || ''}
-          onValueChange={disabled ? undefined : onAnswerSelect}
+          value={selectedAnswer}
+          onValueChange={onAnswerSelect}
           disabled={disabled}
+          className="space-y-3"
         >
-          <div className="space-y-3">
-            {question.options.map((option: string, index: number) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.1 }}
-                className={`flex items-center space-x-3 p-4 border rounded-lg transition-all duration-200 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer ${
-                  selectedAnswer === option 
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400' 
-                    : 'border-gray-200 dark:border-gray-700'
-                } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+          {(question.options || question.choices || []).map((option: string, index: number) => (
+            <div key={index} className="flex items-center space-x-2">
+              <RadioGroupItem value={option} id={`option-${index}`} />
+              <Label 
+                htmlFor={`option-${index}`} 
+                className="text-base cursor-pointer hover:text-blue-600 transition-colors"
               >
-                <RadioGroupItem 
-                  value={option} 
-                  id={`option-${questionIndex}-${index}`}
-                  disabled={disabled}
-                />
-                <Label 
-                  htmlFor={`option-${questionIndex}-${index}`} 
-                  className="flex-1 cursor-pointer text-gray-900 dark:text-white"
-                >
-                  {option}
-                </Label>
-                {selectedAnswer === option && (
-                  <CheckCircle className="w-5 h-5 text-blue-500" />
-                )}
-              </motion.div>
-            ))}
-          </div>
+                {option}
+              </Label>
+            </div>
+          ))}
         </RadioGroup>
       </CardContent>
     </Card>
   );
 };
 
-export default function BattleInterface() {
+export default function SimpleBattleInterface() {
   const { battleId } = useParams<{ battleId: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -206,28 +173,25 @@ export default function BattleInterface() {
   
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, string>>({});
-  const [timeRemaining, setTimeRemaining] = useState(0);
+  const [timeRemaining, setTimeRemaining] = useState(600); // Default 10 minutes
   const [battleStarted, setBattleStarted] = useState(false);
-  const [opponentProgress, setOpponentProgress] = useState(0);
+  const [myScore, setMyScore] = useState(0);
+  const [opponentScore, setOpponentScore] = useState(0);
   const [isCompleting, setIsCompleting] = useState(false);
-  
-  const timerRef = useRef<NodeJS.Timeout>();
-  const startTimeRef = useRef<number>();
 
   // Query for battle data
   const { data: battle, isLoading, error } = useQuery({
     queryKey: ['battle', battleId],
     queryFn: () => simpleBattleApi.getBattle(battleId!),
     enabled: !!battleId,
-    refetchInterval: battleStarted ? 2000 : false, // Poll every 2 seconds while battle is active
+    refetchInterval: battleStarted ? 2000 : false, // Poll every 2 seconds while active
   });
 
   // Mutations
   const acceptChallengeMutation = useMutation({
     mutationFn: () => simpleBattleApi.acceptChallenge(battleId!),
     onSuccess: () => {
-      // Battle will start automatically when accepted
-      toast({ title: 'Challenge accepted!', description: 'Battle is starting automatically...' });
+      toast({ title: 'Challenge accepted!', description: 'Battle is starting...' });
       queryClient.invalidateQueries({ queryKey: ['battle', battleId] });
     },
     onError: (error: any) => {
@@ -239,14 +203,19 @@ export default function BattleInterface() {
     },
   });
 
-  // Note: startSimultaneousBattleMutation is no longer needed
-  // with the simplified system - battles start automatically when accepted
-
-  // Note: joinBattleMutation is no longer needed
-  // with the simplified system - battles start automatically when accepted
-
   const submitAnswerMutation = useMutation({
     mutationFn: (answerData: any) => simpleBattleApi.submitAnswer(battleId!, answerData),
+    onSuccess: (data: any) => {
+      // Update local score immediately
+      if (data.score !== undefined) {
+        setMyScore(data.score);
+      }
+      toast({ 
+        title: 'Answer submitted!', 
+        description: `Score: ${data.score || myScore}`,
+        duration: 1500
+      });
+    },
     onError: (error: any) => {
       toast({ 
         variant: 'destructive', 
@@ -274,85 +243,39 @@ export default function BattleInterface() {
   // Timer effect
   useEffect(() => {
     if (battleStarted && timeRemaining > 0 && !isCompleting) {
-      timerRef.current = setTimeout(() => {
+      const timer = setTimeout(() => {
         setTimeRemaining(prev => prev - 1);
       }, 1000);
+      return () => clearTimeout(timer);
     } else if (timeRemaining === 0 && battleStarted && !isCompleting) {
       handleCompleteBattle();
     }
-
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
-    };
   }, [timeRemaining, battleStarted, isCompleting]);
 
-  // Initialize battle state based on status
+  // Initialize battle state
   useEffect(() => {
     if (battle) {
       if (battle.status === 'active') {
         setBattleStarted(true);
         if (battle.started_at) {
           const elapsed = Math.floor((Date.now() - new Date(battle.started_at).getTime()) / 1000);
-          const remaining = Math.max(0, battle.time_limit - elapsed);
+          const remaining = Math.max(0, (battle.time_limit || 600) - elapsed);
           setTimeRemaining(remaining);
-          startTimeRef.current = new Date(battle.started_at).getTime();
         } else {
-          setTimeRemaining(battle.time_limit);
-          startTimeRef.current = Date.now();
+          setTimeRemaining(battle.time_limit || 600);
         }
       } else {
-        setTimeRemaining(battle.time_limit);
+        setTimeRemaining(battle.time_limit || 600);
       }
     }
   }, [battle]);
 
-  // Consolidated real-time subscriptions for synchronized battle updates
+  // Real-time updates
   useEffect(() => {
     if (!battleId || !user?.id) return;
 
-    console.log('Setting up real-time subscriptions for battle:', battleId);
-
     const channel = supabase
-      .channel(`battle-events-${battleId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'battle_events',
-          filter: `battle_id=eq.${battleId}`,
-        },
-        (payload) => {
-          const event = payload.new;
-          console.log('Received battle event:', event);
-          
-          if (event.event_type === 'started') {
-            // Battle started synchronously for both players
-            if (!battleStarted) {
-              console.log('Battle started event received, starting battle...');
-              setBattleStarted(true);
-              startTimeRef.current = Date.now();
-              setTimeRemaining(battle?.time_limit || 600);
-              toast({ 
-                title: '🚀 Battle Started!', 
-                description: 'Both players are now competing! Good luck!' 
-              });
-              queryClient.invalidateQueries({ queryKey: ['battle', battleId] });
-            }
-          } else if (event.event_type === 'answered' && event.user_id !== user?.id) {
-            // Opponent answered a question
-            setOpponentProgress(prev => prev + 1);
-            const questionNum = (event.data?.question_index || 0) + 1;
-            toast({
-              title: '⚡ Opponent Progress',
-              description: `Your opponent answered question ${questionNum}!`,
-              duration: 2000
-            });
-          }
-        }
-      )
+      .channel(`simple-battle-${battleId}`)
       .on(
         'postgres_changes',
         {
@@ -363,47 +286,54 @@ export default function BattleInterface() {
         },
         (payload) => {
           const updatedBattle = payload.new;
-          console.log('Battle updated:', updatedBattle);
-          
           if (updatedBattle.status === 'active' && !battleStarted) {
-            console.log('Battle status changed to active, starting battle...');
             setBattleStarted(true);
-            if (updatedBattle.started_at) {
-              const elapsed = Math.floor((Date.now() - new Date(updatedBattle.started_at).getTime()) / 1000);
-              const remaining = Math.max(0, updatedBattle.time_limit - elapsed);
-              setTimeRemaining(remaining);
-              startTimeRef.current = new Date(updatedBattle.started_at).getTime();
-            } else {
-              setTimeRemaining(updatedBattle.time_limit);
-              startTimeRef.current = Date.now();
-            }
+            setTimeRemaining(updatedBattle.time_limit || 600);
             toast({ 
               title: '🚀 Battle Started!', 
-              description: 'Both players are now competing! Good luck!' 
+              description: 'Good luck!' 
             });
-            queryClient.invalidateQueries({ queryKey: ['battle', battleId] });
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'battle_events',
+          filter: `battle_id=eq.${battleId}`,
+        },
+        (payload) => {
+          const event = payload.new;
+          if (event.event_type === 'answered' && event.user_id !== user?.id) {
+            // Opponent answered - update their score
+            if (event.data?.score !== undefined) {
+              setOpponentScore(event.data.score);
+            }
           }
         }
       )
       .subscribe();
 
     return () => {
-      console.log('Cleaning up real-time subscriptions');
       supabase.removeChannel(channel);
     };
-  }, [battleId, user?.id, battleStarted, battle?.time_limit, queryClient, toast]);
+  }, [battleId, user?.id, battleStarted, toast]);
 
   const handleAnswerSelect = (questionIndex: number, answer: string) => {
     setSelectedAnswers(prev => ({ ...prev, [questionIndex]: answer }));
     
     // Submit answer immediately
-    const question = battle?.questions[questionIndex];
-    const answerData: BattleAnswer = {
+    const question = battle?.questions?.[questionIndex];
+    if (!question) return;
+
+    const answerData = {
       questionIndex,
-      questionId: question?.id || '',
+      questionId: question.id || questionIndex.toString(),
       selectedAnswer: answer,
-      isCorrect: answer === question?.correct_answer,
-      timeSpent: Math.floor((Date.now() - (startTimeRef.current || Date.now())) / 1000),
+      isCorrect: answer === (question.correct_answer || question.answer),
+      timeSpent: Math.floor((battle?.time_limit || 600) - timeRemaining),
       timestamp: Date.now(),
     };
     
@@ -411,7 +341,7 @@ export default function BattleInterface() {
   };
 
   const handleNextQuestion = () => {
-    if (currentQuestionIndex < (battle?.questions.length || 0) - 1) {
+    if (currentQuestionIndex < (battle?.questions?.length || 0) - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
     } else {
       handleCompleteBattle();
@@ -428,14 +358,14 @@ export default function BattleInterface() {
     if (isCompleting) return;
     setIsCompleting(true);
     
-    const totalQuestions = battle?.questions.length || 0;
+    const totalQuestions = battle?.questions?.length || 0;
     const correctAnswers = Object.entries(selectedAnswers).filter(([index, answer]) => {
-      const question = battle?.questions[parseInt(index)];
-      return answer === question?.correct_answer;
+      const question = battle?.questions?.[parseInt(index)];
+      return answer === (question?.correct_answer || question?.answer);
     }).length;
 
     const results = {
-      score: correctAnswers * 10, // 10 points per correct answer
+      score: correctAnswers * 10,
       accuracy: totalQuestions > 0 ? correctAnswers / totalQuestions : 0,
       timeTaken: (battle?.time_limit || 600) - timeRemaining,
       questionCount: totalQuestions,
@@ -449,20 +379,16 @@ export default function BattleInterface() {
     return battle.status === 'pending' && battle.opponent_id === user.id;
   };
 
-  // Note: canJoinBattle is no longer needed with the simplified system
-  // battles start automatically when accepted
-
   const isWaitingForAcceptance = () => {
     if (!battle || !user) return false;
-    return battle.status === 'pending' && 
-           battle.challenger_id === user.id; // Challenger waits for opponent to accept
+    return battle.status === 'pending' && battle.challenger_id === user.id;
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-orange-600" />
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
           <p className="text-gray-600 dark:text-gray-300">Loading battle...</p>
         </div>
       </div>
@@ -471,7 +397,7 @@ export default function BattleInterface() {
 
   if (error || !battle) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center">
         <Card className="max-w-md mx-auto">
           <CardContent className="text-center py-8">
             <h3 className="text-xl font-semibold mb-2">Battle Not Found</h3>
@@ -488,19 +414,20 @@ export default function BattleInterface() {
     );
   }
 
-  const currentQuestion = battle.questions[currentQuestionIndex];
-  const progress = ((currentQuestionIndex + 1) / battle.questions.length) * 100;
+  const currentQuestion = battle.questions?.[currentQuestionIndex];
+  const progress = ((currentQuestionIndex + 1) / (battle.questions?.length || 1)) * 100;
   const answeredQuestions = Object.keys(selectedAnswers).length;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800">
       <div className="container mx-auto px-4 py-6">
         {/* Battle Header */}
-        <BattleHeader
+        <SimpleBattleHeader
           battle={battle}
           currentUserId={user?.id || ''}
           timeRemaining={timeRemaining}
-          opponentProgress={opponentProgress}
+          myScore={myScore}
+          opponentScore={opponentScore}
           isStarted={battleStarted}
         />
 
@@ -508,7 +435,7 @@ export default function BattleInterface() {
         {!battleStarted ? (
           <Card className="mb-6">
             <CardContent className="text-center py-12">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-r from-orange-500 to-red-600 flex items-center justify-center shadow-lg">
+              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
                 <PlayCircle className="w-10 h-10 text-white" />
               </div>
               
@@ -518,28 +445,27 @@ export default function BattleInterface() {
                     Challenge Received!
                   </h3>
                   <p className="text-gray-600 dark:text-gray-300 mb-6 max-w-md mx-auto">
-                    {battle.challenger?.username} has challenged you to a quiz battle! 
-                    Are you ready to test your knowledge?
+                    {battle.challenger?.username || 'Someone'} has challenged you to a quiz battle!
                   </p>
                   <div className="flex items-center justify-center gap-4 text-sm text-gray-500 dark:text-gray-400 mb-6">
                     <span className="flex items-center gap-1">
                       <Target className="w-4 h-4" />
-                      {battle.question_count} questions
+                      {battle.question_count || 10} questions
                     </span>
                     <span className="flex items-center gap-1">
                       <Timer className="w-4 h-4" />
-                      {Math.floor(battle.time_limit / 60)} minutes
+                      {Math.floor((battle.time_limit || 600) / 60)} minutes
                     </span>
                     <span className="flex items-center gap-1">
                       <Trophy className="w-4 h-4" />
-                      {battle.difficulty} difficulty
+                      {battle.difficulty || 'Medium'} difficulty
                     </span>
                   </div>
                   <Button
                     onClick={() => acceptChallengeMutation.mutate()}
                     disabled={acceptChallengeMutation.isPending}
                     size="lg"
-                    className="bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white shadow-lg"
+                    className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-lg"
                   >
                     {acceptChallengeMutation.isPending ? (
                       <>
@@ -560,45 +486,22 @@ export default function BattleInterface() {
                     ⏳ Waiting for Response
                   </h3>
                   <p className="text-gray-600 dark:text-gray-300 mb-4">
-                    Your challenge has been sent! The battle will start automatically when your opponent accepts.
+                    Your challenge has been sent! The battle will start when your opponent accepts.
                   </p>
-                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg mb-6">
-                    <p className="text-blue-800 dark:text-blue-200 text-sm">
-                      🚀 <strong>Auto-Start:</strong> When your opponent accepts, both players will begin the battle simultaneously!
-                    </p>
-                  </div>
                   <div className="flex items-center justify-center gap-2 text-blue-600 dark:text-blue-400">
                     <Loader2 className="w-5 h-5 animate-spin" />
                     Waiting for opponent to accept...
                   </div>
                 </>
-              ) : battle.status === 'active' && !battleStarted ? (
-                <>
-                  <h3 className="text-2xl font-bold mb-4 text-gray-900 dark:text-white">
-                    Battle is Starting...
-                  </h3>
-                  <p className="text-gray-600 dark:text-gray-300 mb-6">
-                    The battle has been accepted and is starting automatically!
-                  </p>
-                  <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg mb-6">
-                    <p className="text-green-800 dark:text-green-200 text-sm">
-                      🚀 <strong>Auto-Start:</strong> Both players will begin simultaneously when the battle starts!
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-center gap-2 text-green-600 dark:text-green-400">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Preparing battle...
-                  </div>
-                </>
               ) : (
                 <>
                   <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-                    Waiting for Battle to Start
+                    Preparing Battle
                   </h3>
                   <p className="text-gray-600 dark:text-gray-300 mb-6">
                     The battle will begin once your opponent accepts the challenge.
                   </p>
-                  <div className="flex items-center justify-center gap-2 text-orange-600 dark:text-orange-400">
+                  <div className="flex items-center justify-center gap-2 text-blue-600 dark:text-blue-400">
                     <Loader2 className="w-5 h-5 animate-spin" />
                     Waiting...
                   </div>
@@ -611,7 +514,7 @@ export default function BattleInterface() {
             {/* Progress Bar */}
             <div className="mb-6">
               <div className="flex justify-between items-center text-sm text-gray-600 dark:text-gray-300 mb-2">
-                <span>Question {currentQuestionIndex + 1} of {battle.questions.length}</span>
+                <span>Question {currentQuestionIndex + 1} of {battle.questions?.length || 0}</span>
                 <span className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-green-500" />
                   {answeredQuestions} answered
@@ -622,24 +525,21 @@ export default function BattleInterface() {
             </div>
 
             {/* Question Display */}
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={currentQuestionIndex}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.3 }}
-              >
-                <QuestionDisplay
-                  question={currentQuestion}
-                  questionIndex={currentQuestionIndex}
-                  totalQuestions={battle.questions.length}
-                  selectedAnswer={selectedAnswers[currentQuestionIndex]}
-                  onAnswerSelect={(answer) => handleAnswerSelect(currentQuestionIndex, answer)}
-                  disabled={isCompleting}
-                />
-              </motion.div>
-            </AnimatePresence>
+            <motion.div
+              key={currentQuestionIndex}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <SimpleQuestionDisplay
+                question={currentQuestion}
+                questionIndex={currentQuestionIndex}
+                totalQuestions={battle.questions?.length || 0}
+                selectedAnswer={selectedAnswers[currentQuestionIndex]}
+                onAnswerSelect={(answer) => handleAnswerSelect(currentQuestionIndex, answer)}
+                disabled={isCompleting}
+              />
+            </motion.div>
 
             {/* Navigation */}
             <Card>
@@ -657,7 +557,7 @@ export default function BattleInterface() {
                   <div className="text-center">
                     <p className="text-sm text-gray-500 dark:text-gray-400">
                       {timeRemaining > 0 ? (
-                        <>Time remaining: <span className="font-bold text-orange-600">{Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}</span></>
+                        <>Time remaining: <span className="font-bold text-blue-600">{Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}</span></>
                       ) : (
                         <span className="text-red-600 font-bold">Time's up!</span>
                       )}
@@ -674,7 +574,7 @@ export default function BattleInterface() {
                         <Loader2 className="w-4 h-4 animate-spin mr-2" />
                         Completing...
                       </>
-                    ) : currentQuestionIndex === battle.questions.length - 1 ? (
+                    ) : currentQuestionIndex === (battle.questions?.length || 0) - 1 ? (
                       <>
                         Finish Battle
                         <CheckCircle className="w-4 h-4 ml-2" />
