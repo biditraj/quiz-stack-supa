@@ -13,18 +13,18 @@ Complete frontend development guide covering:
 - Theme system and responsive design
 - Authentication and routing
 
-### **Friend Challenges Setup** ([FRIEND_CHALLENGES_SETUP.md](FRIEND_CHALLENGES_SETUP.md))
-Detailed guide for the multiplayer challenge system:
+### **Friend Management Setup** ([README_FRONTEND.md](README_FRONTEND.md))
+Complete guide for the friend management system:
 - Database schema setup
-- Real-time functionality
+- Real-time online presence tracking
 - User relationships and policies
-- Challenge workflow
-- Battle system implementation
+- Friend request workflow
+- Online status management
 
 ## 🚀 Getting Started
 
 1. **New Developers**: Start with the [Frontend Guide](README_FRONTEND.md)
-2. **Database Setup**: Reference the [Friend Challenges Setup](FRIEND_CHALLENGES_SETUP.md)
+2. **Database Setup**: Reference the [Friend Management Setup](README_FRONTEND.md)
 3. **Scripts**: Check the [scripts folder](../scripts/) for database utilities
 
 ## 📁 Related Folders

@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,7 +7,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { Navbar } from "@/components/layout/Navbar";
-// import { Footer } from "@/components/layout/Footer";
+import { Footer } from "@/components/layout/Footer";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AdminRoute } from "@/components/auth/AdminRoute";
 
@@ -24,8 +24,6 @@ import NotFound from "@/pages/NotFound";
 
 // Challenge Pages
 import ChallengesPage from "@/pages/challenges/ChallengesPage";
-import BattleInterface from "@/components/challenges/BattleInterface";
-import BattleResults from "@/components/challenges/BattleResults";
 
 import "./App.css";
 
@@ -50,7 +48,7 @@ function App() {
                 <main className="flex-1">
                   <AnimatedRoutes />
                 </main>
-                {/* Footer removed as requested */}
+                <Footer />
               </div>
             </Router>
             <Toaster />
@@ -65,7 +63,6 @@ function App() {
 export default App;
 
 function AnimatedRoutes() {
-  const location = useLocation();
   return (
     <AnimatePresence mode="wait">
       <motion.div
@@ -101,22 +98,6 @@ function AnimatedRoutes() {
             element={
               <ProtectedRoute>
                 <ChallengesPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/battle/:battleId"
-            element={
-              <ProtectedRoute>
-                <BattleInterface />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/battle/:battleId/results"
-            element={
-              <ProtectedRoute>
-                <BattleResults />
               </ProtectedRoute>
             }
           />

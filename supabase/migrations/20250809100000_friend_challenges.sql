@@ -1,4 +1,4 @@
--- Friend Challenges System Migration
+-- Friend Management System Migration
 -- Enable required extensions
 create extension if not exists pgcrypto;
 
@@ -13,52 +13,17 @@ CREATE TABLE IF NOT EXISTS public.friend_relationships (
   UNIQUE(requester_id, receiver_id)
 );
 
--- 2) Challenge battles table
-CREATE TABLE IF NOT EXISTS public.challenge_battles (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  challenger_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  opponent_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  status TEXT NOT NULL CHECK (status IN ('pending', 'active', 'completed', 'cancelled', 'expired')),
-  category TEXT,
-  difficulty TEXT CHECK (difficulty IN ('easy', 'medium', 'hard')),
-  question_count INTEGER NOT NULL DEFAULT 10,
-  time_limit INTEGER NOT NULL DEFAULT 600, -- 10 minutes in seconds
-  questions JSONB NOT NULL DEFAULT '[]'::jsonb,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '24 hours'),
-  started_at TIMESTAMPTZ,
-  completed_at TIMESTAMPTZ
-);
-
--- 3) Battle participants table (for tracking individual performance)
-CREATE TABLE IF NOT EXISTS public.battle_participants (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  battle_id UUID NOT NULL REFERENCES public.challenge_battles(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  answers JSONB NOT NULL DEFAULT '[]'::jsonb,
-  score INTEGER NOT NULL DEFAULT 0,
-  accuracy DOUBLE PRECISION NOT NULL DEFAULT 0,
-  time_taken INTEGER NOT NULL DEFAULT 0, -- seconds
-  completed_at TIMESTAMPTZ,
-  is_winner BOOLEAN DEFAULT NULL,
-  UNIQUE(battle_id, user_id)
-);
-
--- 4) Real-time battle events (for live updates)
-CREATE TABLE IF NOT EXISTS public.battle_events (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  battle_id UUID NOT NULL REFERENCES public.challenge_battles(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  event_type TEXT NOT NULL CHECK (event_type IN ('joined', 'answered', 'completed', 'left')),
-  data JSONB DEFAULT '{}'::jsonb,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- 2) Online users table for presence tracking
+CREATE TABLE IF NOT EXISTS public.online_users (
+  user_id UUID PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
+  username TEXT,
+  email TEXT,
+  last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Enable RLS
 ALTER TABLE public.friend_relationships ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.challenge_battles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.battle_participants ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.battle_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.online_users ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for friend_relationships
 CREATE POLICY "Users can view their friend relationships" ON public.friend_relationships
@@ -70,203 +35,144 @@ CREATE POLICY "Users can create friend requests" ON public.friend_relationships
 CREATE POLICY "Users can update friend relationships" ON public.friend_relationships
   FOR UPDATE USING (auth.uid() = requester_id OR auth.uid() = receiver_id);
 
--- RLS Policies for challenge_battles
-CREATE POLICY "Users can view their battles" ON public.challenge_battles
-  FOR SELECT USING (auth.uid() = challenger_id OR auth.uid() = opponent_id);
+CREATE POLICY "Users can delete friend relationships" ON public.friend_relationships
+  FOR DELETE USING (auth.uid() = requester_id OR auth.uid() = receiver_id);
 
-CREATE POLICY "Users can create challenges" ON public.challenge_battles
-  FOR INSERT WITH CHECK (auth.uid() = challenger_id);
+-- RLS Policies for online_users
+CREATE POLICY "Users can view online users" ON public.online_users
+  FOR SELECT USING (true);
 
-CREATE POLICY "Users can update their battles" ON public.challenge_battles
-  FOR UPDATE USING (auth.uid() = challenger_id OR auth.uid() = opponent_id);
-
--- RLS Policies for battle_participants
-CREATE POLICY "Users can view battle participants" ON public.battle_participants
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM public.challenge_battles cb 
-      WHERE cb.id = battle_id AND (cb.challenger_id = auth.uid() OR cb.opponent_id = auth.uid())
-    )
-  );
-
-CREATE POLICY "Users can insert their participation" ON public.battle_participants
+CREATE POLICY "Users can update their own online status" ON public.online_users
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can update their participation" ON public.battle_participants
+CREATE POLICY "Users can update their own online status" ON public.online_users
   FOR UPDATE USING (auth.uid() = user_id);
 
--- RLS Policies for battle_events
-CREATE POLICY "Users can view battle events" ON public.battle_events
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM public.challenge_battles cb 
-      WHERE cb.id = battle_id AND (cb.challenger_id = auth.uid() OR cb.opponent_id = auth.uid())
-    )
-  );
-
-CREATE POLICY "Users can create battle events" ON public.battle_events
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-
--- Functions for friend system
+-- Function to send a friend request
 CREATE OR REPLACE FUNCTION public.send_friend_request(receiver_email TEXT)
-RETURNS UUID
+RETURNS TEXT
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  receiver_profile_id UUID;
-  request_id UUID;
+  receiver_id UUID;
+  existing_request_id UUID;
+  result_message TEXT;
 BEGIN
-  -- Find receiver profile
-  SELECT id INTO receiver_profile_id 
+  -- Find the receiver by email
+  SELECT id INTO receiver_id 
   FROM public.profiles 
   WHERE email = receiver_email;
   
-  IF receiver_profile_id IS NULL THEN
-    RAISE EXCEPTION 'User not found';
+  IF receiver_id IS NULL THEN
+    RAISE EXCEPTION 'User with email % not found', receiver_email;
   END IF;
   
-  IF receiver_profile_id = auth.uid() THEN
-    RAISE EXCEPTION 'Cannot send friend request to yourself';
+  -- Check if sender is trying to add themselves
+  IF receiver_id = auth.uid() THEN
+    RAISE EXCEPTION 'You cannot send a friend request to yourself';
   END IF;
   
-  -- Check if relationship already exists
-  IF EXISTS (
-    SELECT 1 FROM public.friend_relationships 
-    WHERE (requester_id = auth.uid() AND receiver_id = receiver_profile_id)
-       OR (requester_id = receiver_profile_id AND receiver_id = auth.uid())
-  ) THEN
-    RAISE EXCEPTION 'Friend relationship already exists';
+  -- Check if there's already a request between these users
+  SELECT id INTO existing_request_id
+  FROM public.friend_relationships
+  WHERE (requester_id = auth.uid() AND receiver_id = receiver_id)
+     OR (requester_id = receiver_id AND receiver_id = auth.uid());
+  
+  IF existing_request_id IS NOT NULL THEN
+    RAISE EXCEPTION 'A friend request already exists between you and this user';
   END IF;
   
-  -- Create friend request
+  -- Create the friend request
   INSERT INTO public.friend_relationships (requester_id, receiver_id, status)
-  VALUES (auth.uid(), receiver_profile_id, 'pending')
-  RETURNING id INTO request_id;
+  VALUES (auth.uid(), receiver_id, 'pending');
   
-  RETURN request_id;
+  result_message := 'Friend request sent to ' || receiver_email;
+  RETURN result_message;
 END;
 $$;
 
--- Function to accept/decline friend requests
+-- Function to respond to a friend request
 CREATE OR REPLACE FUNCTION public.respond_to_friend_request(request_id UUID, response TEXT)
 RETURNS BOOLEAN
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
+DECLARE
+  request_record RECORD;
 BEGIN
-  IF response NOT IN ('accepted', 'declined') THEN
-    RAISE EXCEPTION 'Invalid response. Must be accepted or declined';
-  END IF;
-  
-  UPDATE public.friend_relationships 
-  SET status = response, updated_at = NOW()
+  -- Get the request details
+  SELECT * INTO request_record
+  FROM public.friend_relationships
   WHERE id = request_id AND receiver_id = auth.uid() AND status = 'pending';
   
-  RETURN FOUND;
+  IF request_record IS NULL THEN
+    RAISE EXCEPTION 'Friend request not found or you are not authorized to respond';
+  END IF;
+  
+  -- Update the request status
+  UPDATE public.friend_relationships
+  SET status = response, updated_at = NOW()
+  WHERE id = request_id;
+  
+  RETURN TRUE;
 END;
 $$;
 
--- Function to create challenge battle
-CREATE OR REPLACE FUNCTION public.create_challenge_battle(
-  opponent_email TEXT,
-  p_category TEXT DEFAULT NULL,
-  p_difficulty TEXT DEFAULT 'medium',
-  p_question_count INTEGER DEFAULT 10
-)
-RETURNS UUID
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  opponent_id UUID;
-  battle_id UUID;
-  battle_questions JSONB;
-BEGIN
-  -- Find opponent
-  SELECT id INTO opponent_id 
-  FROM public.profiles 
-  WHERE email = opponent_email;
-  
-  IF opponent_id IS NULL THEN
-    RAISE EXCEPTION 'Opponent not found';
-  END IF;
-  
-  -- Check if users are friends
-  IF NOT EXISTS (
-    SELECT 1 FROM public.friend_relationships 
-    WHERE ((requester_id = auth.uid() AND receiver_id = opponent_id) 
-           OR (requester_id = opponent_id AND receiver_id = auth.uid()))
-    AND status = 'accepted'
-  ) THEN
-    RAISE EXCEPTION 'You can only challenge friends';
-  END IF;
-  
-  -- Get random questions for the battle
-  SELECT jsonb_agg(
-    jsonb_build_object(
-      'id', q.id,
-      'type', q.type,
-      'question_text', q.question_text,
-      'options', q.options,
-      'image_url', q.image_url,
-      'correct_answer', q.correct_answer
-    )
-  ) INTO battle_questions
-  FROM (
-    SELECT * FROM public.questions 
-    WHERE (p_category IS NULL OR category = p_category)
-    ORDER BY RANDOM() 
-    LIMIT p_question_count
-  ) q;
-  
-  -- Create battle
-  INSERT INTO public.challenge_battles (
-    challenger_id, opponent_id, category, difficulty, 
-    question_count, questions
-  )
-  VALUES (
-    auth.uid(), opponent_id, p_category, p_difficulty, 
-    p_question_count, battle_questions
-  )
-  RETURNING id INTO battle_id;
-  
-  RETURN battle_id;
-END;
-$$;
-
--- Function to get user's friends list
+-- Function to get user's friends
 CREATE OR REPLACE FUNCTION public.get_user_friends()
 RETURNS TABLE (
   id UUID,
+  requester_id UUID,
+  receiver_id UUID,
+  status TEXT,
+  created_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ,
   friend_id UUID,
   friend_username TEXT,
-  friend_email TEXT,
-  status TEXT,
-  created_at TIMESTAMPTZ
+  friend_email TEXT
 )
-LANGUAGE sql
+LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
+BEGIN
+  RETURN QUERY
   SELECT 
     fr.id,
+    fr.requester_id,
+    fr.receiver_id,
+    fr.status,
+    fr.created_at,
+    fr.updated_at,
     CASE 
       WHEN fr.requester_id = auth.uid() THEN fr.receiver_id
       ELSE fr.requester_id
     END as friend_id,
     CASE 
-      WHEN fr.requester_id = auth.uid() THEN recv.username
-      ELSE req.username
+      WHEN fr.requester_id = auth.uid() THEN p_receiver.username
+      ELSE p_requester.username
     END as friend_username,
     CASE 
-      WHEN fr.requester_id = auth.uid() THEN recv.email
-      ELSE req.email
-    END as friend_email,
-    fr.status,
-    fr.created_at
+      WHEN fr.requester_id = auth.uid() THEN p_receiver.email
+      ELSE p_requester.email
+    END as friend_email
   FROM public.friend_relationships fr
-  LEFT JOIN public.profiles req ON req.id = fr.requester_id
-  LEFT JOIN public.profiles recv ON recv.id = fr.receiver_id
+  LEFT JOIN public.profiles p_requester ON fr.requester_id = p_requester.id
+  LEFT JOIN public.profiles p_receiver ON fr.receiver_id = p_receiver.id
   WHERE (fr.requester_id = auth.uid() OR fr.receiver_id = auth.uid())
     AND fr.status = 'accepted';
+END;
 $$;
+
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_friend_relationships_requester_id ON public.friend_relationships(requester_id);
+CREATE INDEX IF NOT EXISTS idx_friend_relationships_receiver_id ON public.friend_relationships(receiver_id);
+CREATE INDEX IF NOT EXISTS idx_friend_relationships_status ON public.friend_relationships(status);
+CREATE INDEX IF NOT EXISTS idx_online_users_last_seen ON public.online_users(last_seen);
+
+-- Add comments for documentation
+COMMENT ON TABLE public.friend_relationships IS 'Stores friend relationships between users';
+COMMENT ON TABLE public.online_users IS 'Tracks user online presence for friend management';
+COMMENT ON FUNCTION public.send_friend_request IS 'Sends a friend request to another user by email';
+COMMENT ON FUNCTION public.respond_to_friend_request IS 'Responds to a friend request (accept/decline)';
+COMMENT ON FUNCTION public.get_user_friends IS 'Gets the current user''s accepted friends list';

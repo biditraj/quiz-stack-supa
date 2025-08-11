@@ -18,7 +18,7 @@ bun run build
 ## 📚 Documentation
 
 - **[Frontend Guide](docs/README_FRONTEND.md)** - Detailed frontend documentation
-- **[Friend Challenges Setup](docs/FRIEND_CHALLENGES_SETUP.md)** - Multiplayer challenge system setup
+- **[Friend Management Setup](docs/README_FRONTEND.md)** - Friend management system setup
 - **[Database Scripts](scripts/)** - SQL scripts and database utilities
 
 ## 🛠️ Tech Stack
@@ -63,6 +63,6 @@ The project uses Supabase with:
 - User authentication and profiles
 - Quiz questions and categories
 - Leaderboard and scoring
-- Friend challenges system
-- Real-time presence
+- Friend management system
+- Real-time online presence tracking
 

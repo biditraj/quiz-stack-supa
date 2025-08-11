@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/components/theme-provider';
@@ -20,7 +21,8 @@ import {
   Computer,
   UserCog,
   Menu,
-  Sword
+  Sword,
+  Users
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -38,7 +40,7 @@ export const Navbar = () => {
   const navItems = [
     { path: '/', label: 'Home', icon: null },
     { path: '/quiz', label: 'Quiz', icon: Brain, protected: true },
-    { path: '/challenges', label: 'Challenges', icon: Sword, protected: true },
+    { path: '/challenges', label: 'Friends', icon: Users, protected: true },
     { path: '/leaderboard', label: 'Leaderboard', icon: Trophy, protected: true },
   ];
 
