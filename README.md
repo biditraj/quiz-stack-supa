@@ -66,3 +66,10 @@ The project uses Supabase with:
 - Friend management system
 - Real-time online presence tracking
 
+## ❗ Authentication tip (404 on email link)
+
+If the Supabase email confirmation link from Gmail opens a 404 page:
+
+- Simply go back to the app and log in with the **same email** and **password** you just used to sign up. In most cases, you will be logged in successfully.
+- If that still fails, make sure your Supabase Auth settings include the correct Site URL and Redirect URLs for your environment (local and production).
+
